@@ -52,4 +52,4 @@ Claude Code、OpenCode 对 `~/.agents/skills/<名> -> <别处>` 这种软链形�
 
 ## 许可证
 
-待定。
+MIT，见 [`LICENSE`](LICENSE)。

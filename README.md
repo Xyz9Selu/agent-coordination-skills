@@ -1,54 +1,48 @@
-# Coordinator & Multi-Agent Dispatch Skills
+# Coordinator skills
 
-面向多 Agent 协同开发的任务调度与 Backlog 治理技能库。
+三个给「一个主 agent 指挥多个 coding agent 并行干活」用的技能。每条规则都带着当时怎么测出来的、以及什么观测会推翻它。
 
-通过将大型项目的工作积压（GitHub Issues）进行依赖与冲突分析、合理分组，并利用隔离的 Git Worktree 驱动多个独立 Agent 并行开发，同时由 Coordinator 统一负责冲突巡检与进度护航。
+| 技能 | 管什么 | 依赖 | 能单独用吗 |
+|---|---|---|---|
+| [`herdr-agents`](herdr-agents/SKILL.md) | 用 herdr 起 agent、确认就绪、可靠送达指令、回读、打断、agent 之间传话、判断死活/卡住/干完/被重启、收工 | herdr（以及官方 `herdr` 技能） | 能 |
+| [`github-backlog`](github-backlog/SKILL.md) | 用 GitHub Issues 管活：挑任务、认领、标签、PR 规范、验收 | `gh` | 能 |
+| [`dispatch`](dispatch/SKILL.md) | 调度员：按代码足迹分组防撞车、推荐给用户挑、派活、巡检 | **强依赖 `herdr-agents`**；任务系统可选 | 需要 `herdr-agents` |
 
-## 包含内容
+`dispatch` 不认识 GitHub。它写清了自己需要「工作流」回答的问题（有哪些活、怎么占住、怎么交差、活对应哪个分支），没配工作流时退回到「用户在对话里给清单」。要用 GitHub 管活，就同时用 `dispatch` + `github-backlog`；后者的 [`for-dispatch.md`](github-backlog/for-dispatch.md) 是两者之间的对照。
 
-- **`dispatch`**：Coordinator 调度技能。负责候选 Issue 勘察、代码足迹冲突检测、分组推荐、Worker/Grill Agent 派发与定期巡检。
-  - `dispatch/scripts/bootstrap.sh`：依赖环境检查与仓库标准标签体系一键初始化。
-  - `dispatch/scripts/scan-collisions.sh`：数据库迁移版本号与 ADR 编号等稀缺顺序标识符的跨分支/跨工作区撞号扫描。
-- **`github-backlog`**：基于 GitHub Issues 的六轴治理与互斥认领协议。
-  - `github-backlog/scripts/claim-issue.sh`：跨会话结构化认领、活性检测与陈旧释放脚本。
+## 脚本
 
-## 依赖要求
+| 脚本 | 属于 | 干什么 | 写东西吗 |
+|---|---|---|---|
+| `herdr-agents/scripts/check-env.sh` | herdr-agents | 本机 herdr / claude / agy / opencode 版本 vs 技能里的实测版本 | 不写 |
+| `github-backlog/scripts/bootstrap.sh` | github-backlog | 检查 gh 与仓库；列出缺的标签，确认后才建（`--check` 只列） | 确认后建标签 |
+| `github-backlog/scripts/claim-issue.sh` | github-backlog | 认领、只读检查（`--check`）、`--self-test` | 认领时写 Issue |
+| `dispatch/scripts/scan-collisions.sh` | dispatch | 迁移号 / ADR 编号跨分支撞号扫描（`MIGRATION_DIR`、`ADR_DIR` 必须给） | 不写 |
 
-1. **`gh` (GitHub CLI)**：已安装并完成认证 (`gh auth status`)。
-2. **`herdr`**：用于多工作区与 Agent 终端进程的生命周期管理（推荐基准版本 `0.9.1+`）。
-3. **Agent Harness**：至少安装并配置好以下一种：
-   - `claude` (Claude Code)
-   - `agy` (Antigravity CLI)
-   - `opencode`
+`/dispatch bootstrap` = 跑 `check-env.sh`，再跑你所配工作流的 bootstrap（配 GitHub 就是 `bootstrap.sh`）。
 
-## 用户级安装方法
+## 安装（用户级）
 
-本技能库设计为用户级全局安装，各具体开发仓库按需引用。
+```bash
+git clone <repo-url> ~/src/coordinator-skills
+mkdir -p ~/.agents/skills
+for s in herdr-agents github-backlog dispatch; do
+  ln -s ~/src/coordinator-skills/$s ~/.agents/skills/$s
+done
+```
 
-1. **克隆本仓库到本地固定路径**（例如 `~/coordinator-skills`）：
-   ```bash
-   git clone <repo-url> ~/coordinator-skills
-   ```
+各 harness 从哪里找技能（2026-09-28 实测，细节与推翻条件见 `herdr-agents` §8）：
 
-2. **安装到用户级技能目录**：
-   ```bash
-   mkdir -p ~/.agents/skills
-   ln -s ~/coordinator-skills/dispatch ~/.agents/skills/dispatch
-   ln -s ~/coordinator-skills/github-backlog ~/.agents/skills/github-backlog
-   ```
+| harness | 用户级 | 备注 |
+|---|---|---|
+| Claude Code | `~/.claude/skills/` | 让 `~/.claude/skills` 指向 `~/.agents/skills`，或在其下再建软链 |
+| OpenCode 1.18.32 | `~/.agents/skills/` 与 `~/.claude/skills/` 都扫 | `opencode debug skill` 可查 |
+| agy 1.2.12 | **不发现用户级技能**，只扫工作区 `.agents/skills/` | 派 agy 时在指令里写 `SKILL.md` 的绝对路径（`dispatch` 已要求） |
 
-3. **配置 harness 支持**：
-   - **Claude Code**：确保 `~/.claude/skills` 能够加载技能。若 `~/.claude/skills` 为目录，可在其下建立软链接指向 `~/.agents/skills/` 对应技能目录，或将 `~/.claude/skills` 本身软链至 `~/.agents/skills`。
-   - **OpenCode**：原生扫描 `~/.agents/skills/`，创建软链后即可自动识别。
-   - **Antigravity CLI (agy)**：目前原生扫描工作区 `.agents/` 及 `~/.gemini/config/skills/`，详情参考接入报告。
+**软链的用户级技能目录**能不能被三者发现，没测过。装完用上表的方法各看一眼。
 
-4. **在项目仓库中初始化**：
-   在任何目标 GitHub 仓库中，首次使用前执行：
-   ```bash
-   ~/.agents/skills/dispatch/scripts/bootstrap.sh
-   ```
-   该脚本将自动验证前置工具，并提示创建 `github-backlog` 所需的 13 个基础标签。
+官方 `herdr` 技能要另外装：`herdr-agents` 只写它没写的东西。
 
-## 许可证 (License)
+## 许可证
 
-待定 (Pending discussion)。
+待定。

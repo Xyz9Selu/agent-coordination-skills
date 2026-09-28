@@ -1,17 +1,26 @@
 ---
 name: github-backlog
-description: GitHub backlog coordination for multi-agent workflows. Use when selecting, claiming, verifying, or releasing GitHub Issues, managing labels, coordinating pull requests, or resolving race conditions across parallel agent sessions.
+description: Use when work is tracked in GitHub Issues and needs selecting, claiming, labelling, PR linking, acceptance, releases, or gh CLI coordination — especially when several agent sessions share one backlog. Also when the dispatch skill needs its workflow questions answered on GitHub.
 ---
 
 # GitHub Backlog
 
 GitHub is operational; repository documents preserve requirements and decisions. Never invent configuration or write external resources silently.
 
+**First time in a repository:** run `scripts/bootstrap.sh` from this skill's directory (installed user-level: `~/.agents/skills/github-backlog/scripts/bootstrap.sh`), from inside the repo. It checks `gh`, login, and the repo, then lists the labels this skill uses that the repo lacks and creates them only after you confirm. `--check` lists without creating. It is a one-time setup, not a pre-flight for every run.
+
+Scripts below are written as `claim-issue.sh`; the installed path is `~/.agents/skills/github-backlog/scripts/claim-issue.sh` (or wherever you installed this skill). Run them from inside the repository's worktree.
+
+The human who accepts work before merge is called **the maintainer** below.
+
 ## Route The Work
 
-- Feedback/bugs: triage and bug reports.
-- Design/planning: explore requirements, write step-by-step plans, then decompose into atomic Issues.
+If you have these skills installed:
+
+- Feedback/bugs: `triage`; QA: `qa`.
+- Design/planning: `brainstorming`, then `writing-plans`; approved plans to Issues: `to-issues`.
 - GitHub sync: this skill.
+- Running several worker agents against this backlog: the `dispatch` skill, with this one as its workflow — see [Answering the dispatch skill](#answering-the-dispatch-skill).
 
 ## Read Before Write
 
@@ -55,9 +64,9 @@ Every Issue carries at most one value on each of six independent axes. Never enc
 
 Ownership is deliberately NOT a label. Labels are a shared many-to-many vocabulary; ownership is a single holder. Putting ownership in a label is what causes duplicate selection.
 
-Ownership is also not the **assignee**, even though the assignee is where you look first. Every session authenticates as the same GitHub account, so `gh issue edit <N> --add-assignee @me` on an Issue another session already holds **exits 0 with no diff and no warning**. The write cannot fail, and the assignee it produces cannot tell one session from another. So the assignee answers only *is anyone on this?* — a cheap filter, and the reason step 1's query works at all. The `claim:` comment is the only place that answers *which session, since when, and is it still alive?*, which is why steps 2–3 require it and why its fields are fixed rather than free text.
+Ownership is also not the **assignee**, even though the assignee is where you look first. When every session authenticates as the same GitHub account, `gh issue edit <N> --add-assignee @me` on an Issue another session already holds **exits 0 with no diff and no warning**. The write cannot fail, and the assignee it produces cannot tell one session from another. So the assignee answers only *is anyone on this?* — a cheap filter, and the reason step 1's query works at all. The `claim:` comment is the only place that answers *which session, since when, and is it still alive?*, which is why steps 2–3 require it and why its fields are fixed rather than free text.
 
-There is deliberately **no release-line axis**. An Issue does not carry the version it is planned for; only the exception — an Issue pushed out of the current cycle — is marked, with `deferred`. The consequence is intended: "what ships in 1.1.0" is not a label query. `VERSION` and `CHANGELOG.md` are the release record.
+There is deliberately **no release-line axis**. An Issue does not carry the version it is planned for; only the exception — an Issue pushed out of the current cycle — is marked, with `deferred`. The consequence is intended: "what ships in 1.1.0" is not a label query. The repository's own release files (for example `VERSION` and `CHANGELOG.md`) are the release record.
 
 ## Source And State
 
@@ -67,20 +76,20 @@ Requirements live in GitHub Issues. Lifecycle status is one label per Issue:
 
 - **`Backlog`** — initial state. Represented by **no status label**; there is no `Backlog` label.
 - **`In progress`** — an agent has claimed the Issue and is working it (see Selecting Work).
-- **`In review`** — implementation done and a PR is open, awaiting user pre-merge acceptance. The assignee stays.
-- **`Done`** — set only after user acceptance; accepted PRs merge and close their Issues.
+- **`In review`** — implementation done and a PR is open, awaiting the maintainer's pre-merge acceptance. The assignee stays.
+- **`Done`** — set only after the maintainer's acceptance; accepted PRs merge and close their Issues.
 
-Status is reversible: a design discussion or interview that ends unclear rolls back to `Backlog`, and the claim is released. After merge, new findings use linked bug/follow-up Issues; do not reopen completed work.
+Status is reversible: a grill that ends unclear rolls back to `Backlog`, and the claim is released. After merge, new findings use linked bug/follow-up Issues; do not reopen completed work.
 
 Exception markers are a separate axis — see [Exception Markers](#exception-markers). An Issue can be `blocked` while `In progress`; the exception never replaces the lifecycle status.
 
-Status transitions are agent-maintained (see Write Boundaries): `Backlog`/`In progress`/`In review` transitions require no preflight; `Done` requires user acceptance first.
+Status transitions are agent-maintained (see Write Boundaries): `Backlog`/`In progress`/`In review` transitions require no preflight; `Done` requires the maintainer's acceptance first.
 
 Link Issues to documents; do not advance Markdown from an Issue or PR.
 
 ## Selecting Work
 
-**Multiple agent sessions run in parallel against this backlog.** Selecting an Issue another session already holds wastes a session and produces conflicting branches. Selection is therefore a protocol, not a judgement call.
+**Multiple agent sessions may run in parallel against one backlog.** Selecting an Issue another session already holds wastes a session and produces conflicting branches. Selection is therefore a protocol, not a judgement call.
 
 ### 1. Select — this is the only permitted selection query
 
@@ -115,34 +124,34 @@ gh issue list --state open --limit 100 --label deferred \
 
 Read the reason comment, not the label — the label only says *that* something is parked. **The moment a blocker clears, remove `blocked` (and say so in a comment); that is what puts the Issue back in the candidate set.** Same for `deferred` when it is pulled back into a cycle. Leaving the label on after the reason expires re-creates the permanent-invisibility failure that unreleased claims cause.
 
-Do not clear someone else's exception to make an Issue selectable for yourself. If you believe a `blocked` reason has expired, say so in a comment and let the reason's author or user clear it — the same courtesy the stale-claim rule extends to claims.
+Do not clear someone else's exception to make an Issue selectable for yourself. If you believe a `blocked` reason has expired, say so in a comment and let the reason's author or the maintainer clear it — the same courtesy the stale-claim rule extends to claims.
 
 ### 2. Claim — immediately, for every Issue selected
 
-Do this before any planning, review, or branch work, and do it for the whole set you intend to work — not only the first one.
+Do this before any planning, grilling, or branch work, and do it for the whole set you intend to work — not only the first one.
 
-**The selection query is not the only way an Issue number reaches you.** Numbers also arrive in a user prompt, out of a requirements discussion, as a reference inside another Issue, or in a peer's message. Every one of those paths skips step 1 — and step 1 is where the protocol's only interlock lives. So the rule is not "claim what you selected". It is:
+**The selection query is not the only way an Issue number reaches you.** Numbers also arrive in a user prompt, out of a grilling or triage discussion, as a reference inside another Issue, or in a peer's message. Every one of those paths skips step 1 — and step 1 is where the protocol's only interlock lives. So the rule is not "claim what you selected". It is:
 
-> **Claim before you read the first file.** Whatever the source of the number, steps 2 and 3 come before any research, planning, or branching.
+> **Claim before you read the first file.** Whatever the source of the number, steps 2 and 3 come before any research, planning, grilling, or branch.
 
 An Issue you are merely *thinking about* is invisible to every other session: it has no assignee, no label, no `claim:` comment. Reading code for forty minutes before claiming is how two sessions independently design the same fix.
 
-**A forked session is the sharpest case of this**, and forking is routine here. A fork inherits its parent's whole context — including the Issue numbers the parent was weighing — and it never runs step 1, so it is structurally invisible to any protocol whose entry point is the selection query. Two rules follow. If the fork is doing the work, the claim is the fork's to post, with the fork's own `sid`/`pid`/`sock` (a claim naming a session that is not the one writing code is worse than no claim: it points peers at the wrong place to negotiate). And if the parent already holds the Issue, the fork posts a `claim:` comment of its own noting it supersedes the parent's — the holder must be the session a peer can actually reach.
+**A forked session is the sharpest case of this**, and forking is routine in multi-agent work. A fork inherits its parent's whole context — including the Issue numbers the parent was weighing — and it never runs step 1, so it is structurally invisible to any protocol whose entry point is the selection query. Two rules follow. If the fork is doing the work, the claim is the fork's to post, with the fork's own `sid`/`pid`/`sock` (a claim naming a session that is not the one writing code is worse than no claim: it points peers at the wrong place to negotiate). And if the parent already holds the Issue, the fork posts a `claim:` comment of its own noting it supersedes the parent's — the holder must be the session a peer can actually reach.
 
 One command does the whole claim — preflight, both writes, and the step-3 verify — for the whole set:
 
 ```bash
-~/.agents/skills/github-backlog/scripts/claim-issue.sh 101 102          # claim a set in one call
-~/.agents/skills/github-backlog/scripts/claim-issue.sh --check 101      # read-only: holder, liveness, stale grounds
-~/.agents/skills/github-backlog/scripts/claim-issue.sh --dry-run 101    # show the comment, write nothing
-~/.agents/skills/github-backlog/scripts/claim-issue.sh --self-test      # check the liveness table on this box
+claim-issue.sh 148 153          # claim a set in one call
+claim-issue.sh --check 148      # read-only: holder, liveness, stale grounds
+claim-issue.sh --dry-run 148    # show the comment, write nothing
+claim-issue.sh --self-test      # check the liveness table on this box
 ```
 
 **Read its output.** It refuses to claim an Issue whose holder it can prove is alive, and it prints `⚠ N unreleased claims` when step 3 catches a race. Neither is advisory.
 
-The claim's fields are **fixed**, because a peer has to act on them mechanically, and assembling six coordinates by hand produces a different claim every time. Coordinates a peer cannot resolve are worth nothing. The script is a convenience for that, not a necessity: the fallback further down works, and you should use it when you cannot run the script. What the script buys is `--self-test`, `--check`, uniform output, and no quoting traps around `·`.
+The claim's fields are **fixed**, because a peer has to act on them mechanically, and assembling six coordinates by hand produces a different claim every time — the board this protocol was written on already showed one claim naming a worktree that did not exist and another naming a branch that did not exist. The script is a convenience for that, not a necessity: the fallback further down works, and you should use it when you cannot run the script. What the script buys is `--self-test`, `--check`, uniform output, and no quoting traps around `·`.
 
-Two quirks of a worktree-isolated session's Bash are worth knowing before you hand-roll anything, because each one refuses a shape that looks obviously fine (measured empirically):
+Two quirks of a Claude Code worktree-isolated session's Bash are worth knowing before you hand-roll anything, because each one refuses a shape that looks obviously fine (measured 2026-08-25, one shape per call):
 
 | Command | Result |
 |---|---|
@@ -152,8 +161,10 @@ Two quirks of a worktree-isolated session's Bash are worth knowing before you ha
 | `echo "pid $CLAUDE_PID"` | **refused** |
 | `echo "pid $(printenv CLAUDE_PID)"` | passes |
 
-1. An argument that is *entirely* a command substitution is refused; the same substitution embedded in literal text passes. So `git` is not a trigger and substitution is not the problem — a bare `$(...)` argument is.
-2. `$CLAUDE_*` expansion is refused even inside literal text (while `$HOME` passes). Reach those values with `$(printenv VAR)` instead, which is a command and so falls under rule 1.
+1. An argument that is *entirely* a command substitution is refused; the same substitution embedded in literal text passes. So **`git` is not a trigger** and substitution is not the problem — a bare `$(...)` argument is.
+2. **`$CLAUDE_*` expansion** is refused even inside literal text (while `$HOME` passes). Reach those values with `$(printenv VAR)` instead, which is a command and so falls under rule 1.
+
+(Five successive explanations of this wall were written down that day and were wrong — see the header comment of `claim-issue.sh`. Only the two above survived measurement. Before writing "cannot" into a doc other agents copy from, try one equivalent form.)
 
 What the script writes, and the contract any hand-written claim must still meet:
 
@@ -168,9 +179,9 @@ claim: <branch> · <UTC ISO8601>
 
 `host:` is not decoration. A socket path is meaningful only on the machine that created it, so without a hostname a claim from another machine is indistinguishable from a claim whose session has died — and the safe-looking reading is the dangerous one. See step 3.
 
-`sock:` is what makes a claim **verifiable**. It names a socket that exists only while that session is alive, so any peer can ask "is the holder still there?" without guessing from timestamps (steps 3 and 5). If your harness does not export a messaging socket — OpenCode, Codex, Cursor, plain CI — write `sock: none` honestly. A claim with `sock: none` is still a valid claim; it just cannot be liveness-checked, so only the commit-age rule in step 5 applies to it. **Never invent a socket path.** A path that resolves to nothing reads as a dead session and invites a reclaim of live work.
+`sock:` is what makes a claim **verifiable**. It names a socket that exists only while that session is alive, so any peer can ask "is the holder still there?" without guessing from timestamps (steps 3 and 5). If your harness does not export a messaging socket — OpenCode, Codex, Cursor, agy, plain CI — write `sock: none` honestly. A claim with `sock: none` is still a valid claim; it just cannot be liveness-checked, so only the commit-age rule in step 5 applies to it. **Never invent a socket path.** A path that resolves to nothing reads as a dead session and invites a reclaim of live work.
 
-**Without the script** — another machine, a fresh clone, a harness that cannot run it — all six fields fit in one plain command, and this runs inside a worktree-isolated session:
+**Without the script** — another machine, a fresh clone, a harness that cannot run it — all six fields fit in one plain command, and this runs inside a Claude Code worktree-isolated session (verified 2026-08-25):
 
 ```bash
 echo "claim: $(git branch --show-current) · $(date -u +%Y-%m-%dT%H:%M:%SZ) worktree: $(git rev-parse --show-toplevel) host: $(hostname) sid: $(printenv CLAUDE_CODE_SESSION_ID) pid: $(printenv CLAUDE_PID) sock: $(printenv CLAUDE_CODE_MESSAGING_SOCKET)"
@@ -182,8 +193,8 @@ Pipe it to a file, or paste the output into `gh issue comment <N> --body-file <p
 
 Rewriting an Issue's body, title, or labels — triage, a count correction, a `deferred` marker — is a **third class of action**, neither selection nor implementation, and the claim rule does not stretch to cover it in either direction:
 
-- Requiring a claim would mean claiming dozens of Issues to run one triage sweep. That locks the entire board to do read-mostly work. Not acceptable.
-- Requiring nothing lets two sessions rewrite the same body an hour apart with no coordination. This has happened: an Issue's body was rewritten by one session, then rewritten again by another after a related PR merged (which also corrected an error in the first rewrite). Neither knew of the other.
+- Requiring a claim would mean claiming 49 Issues to run one triage sweep. That locks the entire board to do read-mostly work. Not acceptable.
+- Requiring nothing lets two sessions rewrite the same body an hour apart with no coordination. That has already happened: one Issue's body was rewritten by one session, then rewritten again by another after a related PR merged (which also corrected an error in the first rewrite). Neither knew of the other.
 
 So triage editing needs **no claim**, and instead carries two obligations:
 
@@ -206,7 +217,7 @@ If more than one unreleased `claim:` comment exists, **the earliest timestamp wi
 Before concluding you are the earliest, check the earlier holder's liveness:
 
 ```bash
-~/.agents/skills/github-backlog/scripts/claim-issue.sh --check <N>     # read-only; writes nothing
+claim-issue.sh --check <N>     # read-only; writes nothing
 ```
 
 **The check is deliberately asymmetric — it can prove life, but it can barely prove death:**
@@ -222,9 +233,9 @@ Never invert the first row into a death test. A socket path from another host, o
 
 The one false positive that remains is PID reuse: socket filenames are process ids, so a dead session's path can be reoccupied by an unrelated process and read as "alive". That direction is safe — it makes you too cautious, never too bold — so it needs no handling beyond knowing it exists.
 
-Reading the last `claim:` comment has a second payoff worth naming: **the holder's progress lives in the comments, not the body.** PR links, scope corrections, and "already done, see PR #X" all land there. A session that reads only the Issue body can find a fully-claimed, fully-labelled Issue and still redo work that shipped an hour ago.
+Reading the last `claim:` comment has a second payoff worth naming, because it is what actually went wrong once on the board this was written for: **the holder's progress lives in the comments, not the body.** PR links, scope corrections, and "already done, see #…" all land there. A session that reads only the Issue body can find a fully-claimed, fully-labelled Issue and still redo work that shipped an hour ago.
 
-When the holder *is* alive and you still believe the work should be yours, that is a conversation, not a reclaim. Message the session at its socket or peer channel; if your harness cannot message peers, say what you want in an Issue comment and leave the claim alone. Taking live work is never correct — the whole cost of a duplicate is paid before anyone notices.
+When the holder *is* alive and you still believe the work should be yours, that is a conversation, not a reclaim. Message the session at its `sock:` (Claude Code: `SendMessage` to the peer from `ListAgents`); if your harness cannot message peers, say what you want in an Issue comment and leave the claim alone. Taking live work is never correct — the whole cost of a duplicate is paid before anyone notices.
 
 ### 4. Release — required whenever you stop
 
@@ -235,7 +246,7 @@ gh issue edit <N> --remove-assignee @me --remove-label "In progress"
 gh issue comment <N> --body 'release: <reason>'
 ```
 
-Release when: you drop the Issue, an interview or design discussion ends unclear, the scope moves elsewhere, or you end a session without opening a PR. A merged PR needs no release — `Closes #N` closes the Issue.
+Release when: you drop the Issue, the grill ends unclear, the scope moves elsewhere, or you end a session without opening a PR. A merged PR needs no release — `Closes #N` closes the Issue.
 
 ### 5. Reclaim stale holds
 
@@ -247,12 +258,12 @@ A claim is stale on either of two independent grounds:
 One command reports both grounds, and the unmerged work the next paragraph is about:
 
 ```bash
-~/.agents/skills/github-backlog/scripts/claim-issue.sh --check <N>
+claim-issue.sh --check <N>
 ```
 
 **A dead session does not mean no work was done.** Ground 1 fires in minutes, not days, so it will regularly catch sessions that finished real work and exited — an unmerged branch, an open PR, a green suite nobody merged. `--check` prints the unmerged commits and any PR for the claimed branch for exactly this reason.
 
-If there are commits or a PR, the Issue is not free work — it is finished-or-partial work that needs picking up, and the reclaim comment must say so and point at what exists. Reclaiming it as if from scratch throws that away silently. A classic shape to recognise: CLOSED and `Done`, yet its worktree, branch, and exited session are all still on disk.
+If there are commits or a PR, the Issue is not free work — it is finished-or-partial work that needs picking up, and the reclaim comment must say so and point at what exists. Reclaiming it as if from scratch throws that away silently. The shape to recognise: an Issue that is CLOSED and `Done`, with its worktree, branch, and exited session all still on disk.
 
 Post the reclaim before claiming, naming the ground you used:
 
@@ -268,11 +279,11 @@ Write the Issue as the **observed problem** — what is wrong, who it hurts, and
 
 The reason is not style. **A solution outlives its own validity; the pain outlives the solution.** A decision landed a week later can forbid the approach an Issue prescribes while leaving every symptom it reported fully intact — and then the Issue is unactionable as written, even though the problem is real and unfixed.
 
-A real-world example: an Issue titled *"Auto-create local record upon sync from external system"* was filed shortly after an architectural decision record (ADR) was accepted stating: *"External sync updates existing matching records to approved; never auto-create local applications"*. So:
+A real case: an Issue titled *"auto-create the local application when the external system syncs an overtime or leave record"* was filed roughly four hours *after* an accepted decision record said the sync signal «only updates an existing, matching local application to `approved` — **it never auto-creates one**». So:
 
-- Implementing the Issue as titled violates an accepted architecture decision.
-- Closing it as `wontfix` reads as "we do not care" — but the pain is real: the external system holds a record, the local system does not, and the user cannot see their own record in the application.
-- Neither option is right, and the Issue sits unactionable. Had it been titled *"Records existing externally but not locally are invisible to users"*, the architectural decision would have **narrowed** it (auto-create is out; a read-only external projection or an admin notification is in) instead of **invalidating** it.
+- Implementing the Issue as titled violates an accepted decision.
+- Closing it as `wontfix` reads as "we do not care" — but the pain is real: the external system holds a record, the local system does not, and the employee cannot see their own leave in this system.
+- Neither option is right, and the Issue sat unactionable. Had it been titled *"overtime/leave that exists externally but not locally is invisible to the employee"*, the decision would have **narrowed** it (auto-create is out; a read-only external record, or a better notification to the administrator, is in) instead of **invalidating** it.
 
 So, when writing:
 
@@ -288,7 +299,7 @@ Every Issue carries exactly one type label. This is the coarsest axis and the mo
 
 - **`bug`** — existing behavior is wrong. Needs a *found version* (below) and, where possible, a reproduction.
 - **`enhancement`** — new behavior, or an improvement to correct behavior.
-- **`documentation`** — docs, architectural records, agent instructions. No code change.
+- **`documentation`** — docs, ADRs, agent instructions. No code change.
 
 `duplicate`, `wontfix`, `invalid`, `question`, `good first issue`, and `help wanted` are GitHub defaults. Only `duplicate` and `wontfix` are used here, and they are **exception markers**, not types — see below. Do not use the others.
 
@@ -339,7 +350,7 @@ Both open exceptions are excluded from the selection query (see [Selecting Work]
 
 When creating a PR that implements an Issue, add `Closes #N` (or `Fixes #N` for bugs) in the PR body referencing the Issue it implements. This makes the Issue auto-close on merge.
 
-- `Closes #N` is valid only after user pre-merge acceptance; until then the PR is a draft-style link, not a close signal.
+- `Closes #N` is valid only after the maintainer's pre-merge acceptance; until then the PR is a draft-style link, not a close signal.
 - One PR implements at most one atomic Issue. A parent Issue (batch) is closed when its last sub-Issue merges; the PR closes the sub-Issue, not the parent.
 
 ## Write Boundaries
@@ -351,7 +362,7 @@ When creating a PR that implements an Issue, add `Closes #N` (or `Fixes #N` for 
 | Status label transitions `Backlog` / `In progress` / `In review` (one Issue, at the workflow trigger point) | No preflight; automatic |
 | Apply or clear `blocked` (with its reason comment) | No preflight; automatic |
 | Apply `deferred`, `duplicate`, or `wontfix` (each closes or parks work) | Direct request after preflight |
-| Set `Done` (requires user acceptance first) | Direct request after preflight |
+| Set `Done` (requires the maintainer's acceptance first) | Direct request after preflight |
 | One explicit Issue create/comment/verified transition | Direct request after preflight |
 | One explicit PR create/comment/review request | Direct request after preflight (body includes `Closes #N` for the Issue it implements) |
 | Merge or close a PR | Direct request after base/head, checks/reviews, conflicts, and Issue verification |
@@ -365,22 +376,26 @@ Before a confirmed write, state target, affected objects/files, transition, and 
 
 Bootstrap: inspect, then present Project, fields, labels, templates, migration mapping, duplicate rule, and source policy. After approval, configure/migrate and reconcile; preserve Markdown history unless approved otherwise.
 
-To initialize required repository labels automatically, run `~/.agents/skills/dispatch/scripts/bootstrap.sh`.
+The label part of that is `scripts/bootstrap.sh` (see the top of this skill): it lists the labels this skill uses that are missing and creates them only on confirmation — the label-taxonomy row of *Write Boundaries* applied. Existing labels are left untouched. Projects, templates, and migrations are still done by hand, with the change set shown first.
 
 ## Release
 
-Release with synchronized root `VERSION`, `CHANGELOG.md`, and a verified annotated tag only on the release commit. A Milestone needs confirmation.
+Release per the repository's own procedure — for example synchronized `VERSION` files, `CHANGELOG.md`, and a verified annotated tag only on the release commit. A Milestone needs confirmation.
 
 ## Acceptance Feedback
 
-The user accepts while the Issue is in `In review` (before merge). Small in-scope changes revise the same PR and repeat acceptance. Material scope/rule changes need a linked follow-up Issue; do not expand the accepted PR. After merge, new findings use linked bug/follow-up Issues; do not reopen completed work.
+The maintainer accepts while the Issue is in `In review` (before merge). Small in-scope changes revise the same PR and repeat acceptance. Material scope/rule changes need a linked follow-up Issue; do not expand the accepted PR. After merge, new findings use linked bug/follow-up Issues; do not reopen completed work.
+
+## Answering The Dispatch Skill
+
+The `dispatch` skill does not know GitHub. It names four questions a workflow must answer (Q1 what work exists, Q2 how it is held, Q3 how it is delivered, Q4 which branch it is on) and two optional ones (QA where coordinator check marks go, QB how a container's completion is read). When you run `dispatch` with this skill as its workflow, **read [`for-dispatch.md`](for-dispatch.md)** — it maps each question to the commands and readings on this page, plus the GitHub-only traps the coordinator hits.
 
 ## Common Mistakes
 
 - Selecting from an unfiltered `gh issue list`. Always use the Selecting Work query — an Issue held by another session looks perfectly available otherwise.
 - Claiming only the first Issue of a set. Claim every Issue you intend to work, or the rest read as free to everyone else.
 - Claiming without the `claim:` comment. An anonymous hold cannot be told apart from a stale one, so other agents will rightly ignore it.
-- Reading a successful `--add-assignee @me` as evidence the Issue was free. Every session is the same GitHub account, so that command exits 0 whether or not somebody already holds it. It is not a lock and never fails; step 3 is where a collision surfaces.
+- Reading a successful `--add-assignee @me` as evidence the Issue was free. When every session is the same GitHub account, that command exits 0 whether or not somebody already holds it. It is not a lock and never fails; step 3 is where a collision surfaces.
 - Working an Issue whose number came from a prompt, a triage discussion, or another Issue's text — without claiming it, because it never came through the selection query. The query is one entrance among several; the claim is the interlock. Claim before the first file you read.
 - Reading only the Issue body. Progress lives in the comments: the PR link, the scope correction, the "already done". A body-only read of a correctly-claimed Issue can still send you off to redo shipped work.
 - Reading an absent socket as a dead session. Absent is *Unknown* unless `host:` matches this machine — otherwise you are about to reclaim work whose owner is alive on another box.
@@ -396,6 +411,6 @@ The user accepts while the Issue is in `In review` (before merge). Small in-scop
 - Dropping the `-label:deferred -label:blocked` clauses when re-typing the selection query from memory. Neither of those Issues has an assignee, so without the clauses they sail through `no:assignee` and read as the freest work on the board.
 - Making the proposed fix the title. When a later decision forbids that fix, the Issue becomes unimplementable *and* unclosable — the pain is still real, so `wontfix` is wrong too. Title the pain; keep approaches in their own section.
 - Closing a solution-titled Issue because its solution is now forbidden. Rewrite it to the pain instead; closing it deletes the only record that the problem exists.
-- `Closes #N` is valid only after user pre-merge acceptance.
+- `Closes #123` is valid only after the maintainer's pre-merge acceptance.
 - Status is a label on the Issue, not a Project field. One status label per Issue.
-- Setting `Done` on your own; wait for user acceptance.
+- Setting `Done` on your own; wait for the maintainer's acceptance.

@@ -6,15 +6,17 @@
 # comment carrying branch, worktree, host, sid, pid, sock", which leaves every
 # caller to assemble six coordinates by hand. A claim reassembled from prose
 # every time is a claim written differently every time — and the whole point of
-# the fixed fields is that a *peer* can act on them mechanically. Hand-assembled
-# coordinates can easily name non-existent worktrees or branches.
+# the fixed fields is that a *peer* can act on them mechanically. On the board
+# this script was written for, hand-assembled claims already disagreed: one named
+# a worktree that did not exist, another named a branch that did not exist.
 # Coordinates a peer cannot resolve are worth nothing.
 #
 # It also does the preflight and the verify that are easy to skip:
 #   - preflight: is the Issue already held by a session that is still ALIVE?
 #   - verify:    re-read after writing, because the assignee write cannot fail.
 #
-# Usage:
+# Usage (installed user-level, the script lives at
+# ~/.agents/skills/github-backlog/scripts/claim-issue.sh; run it from inside the repo):
 #   claim-issue.sh 101 102              # claim the whole set, one call
 #   claim-issue.sh --check 101          # read-only: who holds it, alive?,
 #                                       #   plus the stale-reclaim grounds
@@ -25,13 +27,23 @@
 # Why a script: --self-test, --check, uniform output, and no quoting traps
 # around the `·` separator. NOT because a snippet is impossible -- the skill
 # carries a one-line fallback that emits all six fields and runs fine inside a
-# worktree-isolated session.
+# worktree-isolated session. Five successive attributions of that wall were
+# wrong on 2026-08-25 (`git` in a substitution / substitution plus compound flow
+# / substitution refused wholesale / an argument that is entirely a substitution
+# / $CLAUDE_* being unreachable). Only two survive measurement: a bare `$(...)`
+# argument is refused while the same substitution inside literal text passes,
+# and $CLAUDE_* *expansion* is refused -- which `$(printenv VAR)` sidesteps.
+# The lesson worth keeping: before writing "cannot" into a doc other agents
+# copy from, try one equivalent form.
 #
 # This is NOT a lock. Every session authenticates as the same GitHub account,
 # so `gh issue edit --add-assignee @me` exits 0 whether or not somebody holds
 # the Issue; nothing here can make that write fail. What this buys is that a
 # collision becomes *visible* — at preflight if the holder is alive, at verify
 # if two sessions raced. Read the output.
+#
+# Environment (defaults match the github-backlog skill):
+#   DEFAULT_REMOTE=origin  DEFAULT_BRANCH=main  IN_PROGRESS_LABEL="In progress"
 set -uo pipefail
 
 DEFAULT_REMOTE="${DEFAULT_REMOTE:-origin}"
@@ -253,7 +265,7 @@ self_test() {
   host: $host  sid: $sid  pid: 1
   sock: /run/user/1000/cc-socks/999999.sock"
 
-  # handle_live_holder: --check must never narrate a force it didn't do (#234).
+  # handle_live_holder: --check must never narrate a force it didn't do (an earlier version did).
   check_holder_action() {  # check_holder_action <label> <check_only> <force> <expect-force-line:0|1> <expect-rc>
     local label="$1" co="$2" fo="$3" expect_force="$4" expect_rc="$5" out rc_got ok=1
     out="$(handle_live_holder "$co" "$fo" 2>&1)"; rc_got=$?

@@ -1,37 +1,40 @@
 #!/usr/bin/env bash
 #
-# 稀缺顺序标识符撞号扫描 —— coordinator 巡检用（见 dispatch 技能「巡检」一节）。
+# 稀缺顺序标识符撞号扫描 —— coordinator 巡检用（见 dispatch 技能 patrol.md「稀缺顺序标识符撞号」）。
 #
-# 为什么存在：两条分支各占一个数据库迁移版本号或架构决策记录（ADR）编号时，
-# **文件路径不冲突，git 会干净地把两个都合进去**，直到数据库升级报多头或多份同号 ADR 同时躺在
-# 目录中。分组时叮嘱每个 worker「别占号」失效过多次 —— 检查必须落在
+# 为什么存在：两条分支各占一个数据库迁移号或 ADR 编号时，**文件路径不冲突，git 会干净地把
+# 两个都合进去**，直到数据库升级报双头，或两份同号 ADR（例如两个 ADR-094）同时躺在 ADR 目录里。
+# 分组时叮嘱每个 worker「别占号」失效过两次（一次迁移双头、一次 ADR 撞号）—— 检查必须落在
 # coordinator 已经会重复发生的巡检循环里。
 #
-# 扫 DEFAULT_REMOTE/DEFAULT_BRANCH + 本机所有 worktree + 未合并进主干的远端分支，报三类：
+# 扫 DEFAULT_REMOTE/DEFAULT_BRANCH（默认 origin/main）+ 本机所有 worktree + 未合并进主干的远端分支，报三类：
 #   ① 两条分支各自新增了同一个 id；
 #   ② 某条分支的 id 与主干上某个相同、**但文件名不同** —— 这一种 git 完全看不见，最危险；
 #   ③ 同一条分支内部两个文件撞同一个 id。
 #
-# 迁移号按**文件内容里的 `revision =`** 解析，不按文件名（文件名不同而 id 相同正是 ② ）。
-# ADR 号按文件名解析（编号通常在文件名开头如 001-xxx.md）。
+# 迁移号按**文件内容里的 `revision = '...'`** 解析（Python 迁移文件的这种写法），不按文件名
+# （文件名不同而 id 相同正是 ② ）。别的迁移工具，改下面的 parse_rev。
+# ADR 号只能按文件名解析（`NNN-标题.md`，编号不在正文里），所以 ② 对 ADR 同样成立且同样只有这里能抓到。
 # 扫的是各 worktree 的**工作区文件**（未提交的也算），撞号越早发现越便宜。
 #
 # 退出码：0 = 无撞号；1 = 发现撞号；9 = 脚本自身出错。
-# 三者分开，是因为巡检脚本崩溃和真实告警在退出码上分不出来时已经误报过多次。
+# 三者分开，是因为巡检脚本崩溃和真实告警在退出码上分不出来时已经误报过两次。
 #
-# 用法：scan-collisions.sh [--no-fetch] [--days N]   # N = 远端分支的新鲜度窗口，默认 2 天
-# 可选环境变量：
-#   DEFAULT_REMOTE=origin
-#   DEFAULT_BRANCH=main
-#   MIGRATION_DIR=backend/alembic/versions
-#   ADR_DIR=docs/adr
+# 用法：MIGRATION_DIR=<迁移目录> ADR_DIR=<ADR 目录> scan-collisions.sh [--no-fetch] [--days N]
+#       N = 远端分支的新鲜度窗口，默认 2 天
+# 环境变量：
+#   MIGRATION_DIR  迁移文件目录（相对仓库根），不设 = 不扫迁移号，并在输出里说出来
+#   ADR_DIR        ADR 目录（相对仓库根），不设 = 不扫 ADR 编号，并在输出里说出来
+#                  两个都不设 = 报错退出 9：什么都不扫却报「无撞号」，正是要防的那种静默
+#   DEFAULT_REMOTE=origin  DEFAULT_BRANCH=main
+# 两个目录没有默认值是有意的：写死某个项目的路径，换到别的仓库就会目录不存在、扫空、报「无撞号」。
 
 set -uo pipefail
 
 DEFAULT_REMOTE="${DEFAULT_REMOTE:-origin}"
 DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}"
-MIGRATION_DIR="${MIGRATION_DIR:-backend/alembic/versions}"
-ADR_DIR="${ADR_DIR:-docs/adr}"
+MIGRATION_DIR="${MIGRATION_DIR:-}"
+ADR_DIR="${ADR_DIR:-}"
 
 do_fetch=1
 days=2
@@ -51,6 +54,15 @@ if [ -z "$here" ]; then
   here="$(git -C "$here" rev-parse --show-toplevel 2>/dev/null || echo "")"
 fi
 [ -n "$here" ] || { echo "ERR: 不在 git 仓库里" >&2; exit 9; }
+
+if [ -z "$MIGRATION_DIR" ] && [ -z "$ADR_DIR" ]; then
+  echo "ERR: MIGRATION_DIR 与 ADR_DIR 都没设——什么都不扫。至少设一个（相对仓库根的目录）" >&2
+  exit 9
+fi
+for d in "$MIGRATION_DIR" "$ADR_DIR"; do
+  [ -z "$d" ] && continue
+  [ -d "$here/$d" ] || { echo "ERR: 目录 $d 在 $here 下不存在——路径写错会扫空、误报「无撞号」" >&2; exit 9; }
+done
 
 target_base="${DEFAULT_REMOTE}/${DEFAULT_BRANCH}"
 
@@ -72,8 +84,9 @@ parse_rev() {
 : > "$tmp/main_rev"
 : > "$tmp/main_adr"
 
-git -C "$here" ls-tree -r --name-only "$target_base" -- "$MIGRATION_DIR/" 2>/dev/null \
-  | grep -E '\.py$' | grep -v '__init__' > "$tmp/main_mig_files" || true
+: > "$tmp/main_mig_files"
+[ -n "$MIGRATION_DIR" ] && { git -C "$here" ls-tree -r --name-only "$target_base" -- "$MIGRATION_DIR/" 2>/dev/null \
+  | grep -E '\.py$' | grep -v '__init__' > "$tmp/main_mig_files" || true; }
 
 while read -r f; do
   [ -n "$f" ] || continue
@@ -82,9 +95,9 @@ while read -r f; do
   [ -n "$r" ] && printf '%s\t%s\n' "$r" "$(basename "$f")" >> "$tmp/main_rev"
 done < "$tmp/main_mig_files"
 
-git -C "$here" ls-tree -r --name-only "$target_base" -- "$ADR_DIR/" 2>/dev/null \
+[ -n "$ADR_DIR" ] && { git -C "$here" ls-tree -r --name-only "$target_base" -- "$ADR_DIR/" 2>/dev/null \
   | grep -oE '[0-9]{3}-[^/]*\.md$' \
-  | while read -r b; do printf '%s\t%s\n' "${b:0:3}" "$b"; done > "$tmp/main_adr" || true
+  | while read -r b; do printf '%s\t%s\n' "${b:0:3}" "$b"; done > "$tmp/main_adr" || true; }
 
 main_file_for() {  # $1=main_rev|main_adr  $2=id
   awk -F'\t' -v id="$2" '$1==id {print $2; exit}' "$tmp/$1"
@@ -109,7 +122,7 @@ record() {  # $1=rev|adr  $2=id  $3=来源  $4=文件名
 
 scan_worktree() {  # $1=路径  $2=来源标签
   local wt="$1" src="$2" f r n
-  if [ -d "$wt/$MIGRATION_DIR" ]; then
+  if [ -n "$MIGRATION_DIR" ] && [ -d "$wt/$MIGRATION_DIR" ]; then
     for f in "$wt"/$MIGRATION_DIR/*.py; do
       [ -f "$f" ] || continue
       case "$(basename "$f")" in __init__.py) continue ;; esac
@@ -117,7 +130,7 @@ scan_worktree() {  # $1=路径  $2=来源标签
       record rev "$r" "$src" "$(basename "$f")"
     done
   fi
-  if [ -d "$wt/$ADR_DIR" ]; then
+  if [ -n "$ADR_DIR" ] && [ -d "$wt/$ADR_DIR" ]; then
     for f in "$wt"/$ADR_DIR/[0-9][0-9][0-9]-*.md; do
       [ -f "$f" ] || continue
       n=$(basename "$f")
@@ -128,8 +141,9 @@ scan_worktree() {  # $1=路径  $2=来源标签
 
 scan_ref() {  # $1=ref  $2=来源标签
   local ref="$1" src="$2" f r n
-  git -C "$here" ls-tree -r --name-only "$ref" -- "$MIGRATION_DIR/" 2>/dev/null \
-    | grep -E '\.py$' | grep -v '__init__' > "$tmp/ref_mig" || true
+  : > "$tmp/ref_mig"; : > "$tmp/ref_adr"
+  [ -n "$MIGRATION_DIR" ] && { git -C "$here" ls-tree -r --name-only "$ref" -- "$MIGRATION_DIR/" 2>/dev/null \
+    | grep -E '\.py$' | grep -v '__init__' > "$tmp/ref_mig" || true; }
   while read -r f; do
     [ -n "$f" ] || continue
     git -C "$here" show "$ref:$f" > "$tmp/one.py" 2>/dev/null || continue
@@ -137,8 +151,8 @@ scan_ref() {  # $1=ref  $2=来源标签
     record rev "$r" "$src" "$(basename "$f")"
   done < "$tmp/ref_mig"
 
-  git -C "$here" ls-tree -r --name-only "$ref" -- "$ADR_DIR/" 2>/dev/null \
-    | grep -oE '[0-9]{3}-[^/]*\.md$' > "$tmp/ref_adr" || true
+  [ -n "$ADR_DIR" ] && { git -C "$here" ls-tree -r --name-only "$ref" -- "$ADR_DIR/" 2>/dev/null \
+    | grep -oE '[0-9]{3}-[^/]*\.md$' > "$tmp/ref_adr" || true; }
   while read -r n; do
     [ -n "$n" ] || continue
     record adr "${n:0:3}" "$src" "$n"
@@ -146,6 +160,8 @@ scan_ref() {  # $1=ref  $2=来源标签
 }
 
 echo "===== 撞号扫描 $(date '+%F %H:%M:%S') ====="
+[ -n "$MIGRATION_DIR" ] || echo "ℹ 未设 MIGRATION_DIR：本次不扫迁移号"
+[ -n "$ADR_DIR" ] || echo "ℹ 未设 ADR_DIR：本次不扫 ADR 编号"
 echo "$target_base: 迁移最大 $(cut -f1 "$tmp/main_rev" | sort | tail -1)  ADR 最大 $(cut -f1 "$tmp/main_adr" | sort | tail -1)"
 echo
 
@@ -162,9 +178,10 @@ while read -r wt; do
   [ -n "$nr$na" ] && printf "  %-38s 迁移:[%s] ADR:[%s]\n" "$br" "${nr% }" "${na% }"
 done < "$tmp/wts"
 
-# 未合并进主干的远端分支 —— worktree 被删掉、PR 还开着的那些，号照样被占着。
-# 只看最近 $days 天有提交的：更老的分支多半是废弃的，而废弃分支里的历史撞号会刷满屏。
-# 2 天这个口径和 claim 协议判「陈旧」用的是同一条线。
+# 未合并进主干的远端分支 —— worktree 被删掉、交付物还开着的那些，号照样被占着。
+# 只看最近 $days 天有提交的：更老的分支多半是废弃的，而废弃分支里的历史撞号（曾有一个仓库改过一次
+# 迁移文件命名，老分支里 `<日期>_0046_*.py` 与主干的 `0046.py` 同 id）会刷满屏，把真信号埋掉。
+# 2 天这个口径取自一个工作流判占住「陈旧」用的线（换了工作流就对齐它的口径，用 --days N）。
 cutoff=$(( $(date +%s) - days * 86400 ))
 skipped_old=0
 git -C "$here" for-each-ref --format='%(committerdate:unix) %(refname:short)' "refs/remotes/${DEFAULT_REMOTE}" \
@@ -214,5 +231,5 @@ fi
 
 [ "$hit" -eq 0 ] && { echo "  ✅ 无撞号"; exit 0; }
 echo
-echo "  处理：先占者保号，协调后占的一方改号；改号若涉及已被 Issue 评论引用的编号，连带更新引用。"
+echo "  处理：先占者保号，协调后占的一方改号；改号若涉及已被任务记录引用的编号，连带更新引用。"
 exit 1

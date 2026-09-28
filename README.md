@@ -1,4 +1,4 @@
-# Coordinator skills
+# Agent coordination skills
 
 三个给「一个主 agent 指挥多个 coding agent 并行干活」用的技能。每条规则都带着当时怎么测出来的、以及什么观测会推翻它。
 
@@ -24,11 +24,11 @@
 ## 安装（用户级）
 
 ```bash
-git clone <repo-url> ~/src/coordinator-skills
+git clone https://github.com/Xyz9Selu/agent-coordination-skills.git ~/src/agent-coordination-skills
 mkdir -p ~/.agents/skills ~/.gemini/config/skills
 for s in herdr-agents github-backlog dispatch; do
-  ln -s ~/src/coordinator-skills/$s ~/.agents/skills/$s          # Claude Code、OpenCode
-  ln -s ~/src/coordinator-skills/$s ~/.gemini/config/skills/$s   # agy
+  ln -s ~/src/agent-coordination-skills/$s ~/.agents/skills/$s          # Claude Code、OpenCode
+  ln -s ~/src/agent-coordination-skills/$s ~/.gemini/config/skills/$s   # agy
 done
 ~/.agents/skills/herdr-agents/scripts/check-env.sh              # 核版本，并列出两处各装没装
 ```

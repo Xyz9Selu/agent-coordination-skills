@@ -172,10 +172,10 @@ transcript 位置；其它 kind 的对应物没有记录。）
 2026-08-25 实测：经 `agent prompt` 打进输入框的 `/grill-with-docs` 会正常加载技能，即使它带
 `disable-model-invocation: true`（那条只挡模型自行加载，不挡人敲，而打进输入框等同人敲）。
 
-### 指令里要引用技能时，写清它能不能找到
+### 指令里要引用技能时，先确认对方的 harness 找得到它
 
-各 harness 发现技能的位置不同，见 §8。**agy 不发现用户级技能**：给 agy 的指令里凡是要它读某个技能，
-写**那个 `SKILL.md` 的绝对路径**，不要只写技能名。
+各 harness 发现用户级技能的目录不同，见 §8。装对了位置，指令里只写技能名就行；没把握时，在一个空目录里
+让那个 agent 列一次技能。
 
 ### 一个尚未证伪也尚未确认的观测
 
@@ -344,16 +344,30 @@ for p in $(pgrep -x agy); do printf '%s\t%s\n' "$p" "$(readlink /proc/$p/cwd)"; 
 
 ## 8 · 各 harness 从哪里发现技能
 
-| harness | 用户级（`~/.agents/skills/`、`~/.claude/skills/`） | 工作区级 | 怎么测的 |
+| harness | 用户级 | 工作区级 | 怎么测的 |
 |---|---|---|---|
 | Claude Code | **发现** `~/.claude/skills/`。测的那台机器上 `~/.claude/skills` 整个是指向 `~/.agents/skills` 的软链；Claude Code 自己扫不扫 `~/.agents/skills/` **没单独测** | `.claude/skills/`；其中软链到别处的技能目录也会被发现 | 2026-09-28：session 的技能列表里出现用户级技能，也出现工作区里以软链存在的技能 |
-| OpenCode 1.18.32 | **发现**，两个目录都扫 | 未测出结论 | 2026-09-28：在一个空目录里跑 `opencode debug skill`，列出的 `location` 全在 `~/.agents/skills/…` 下，日志里对 `~/.claude/skills/…` 报 `duplicate skill name`（说明两个都扫了） |
-| agy 1.2.12 | **不发现** | `.agents/skills/` | 2026-09-28 实测：列技能时用户级技能不出现；用触发词问它，它是靠 `find ~` 搜到文件再读出来的，不是加载 |
+| OpenCode 1.18.32 | **发现** `~/.agents/skills/` 与 `~/.claude/skills/`，两个都扫 | 未测出结论 | 2026-09-28：在一个空目录里跑 `opencode debug skill`，列出的 `location` 全在 `~/.agents/skills/…` 下，日志里对 `~/.claude/skills/…` 报 `duplicate skill name`（说明两个都扫了） |
+| agy 1.2.12 | **发现 `~/.gemini/config/skills/<名>/SKILL.md`**（软链也行）；**不扫 `~/.agents/skills/`** | `.agents/skills/` | 2026-09-28，见下 |
 
-推论：**派 agy 时，指令里写明要它读的技能的绝对路径**（§2）。
+**所以用户级安装要链两处**：`~/.agents/skills/<名>`（Claude Code 经 `~/.claude/skills`、OpenCode）和
+`~/.gemini/config/skills/<名>`（agy）。`scripts/check-env.sh` 会列出三份技能在这两处各在不在。
 
-**什么观测会推翻本表**：agy 的技能列表里出现用户级技能 ⇒ agy 那行改成「发现」，§2 那条可删；
-OpenCode 某版本的 `opencode debug skill` 不再列出 `~/.agents/skills/…` ⇒ 改 OpenCode 那行。
+**agy 这一行怎么测的**（2026-09-28，agy 1.2.12）：在 `~/.gemini/config/skills/<名>/SKILL.md` 放一个探针技能，
+在一个空目录里让 agy 列技能（明确要求不调用工具），列表里出现了它；把它换成**指向别处的软链**再测一次，照样
+出现。对照：同一个探针放在 `~/.agents/skills/` 时不出现——用触发词问它，它是靠 `find ~` 搜到文件再读出来的，
+不是加载。
 
-软链的**用户级**技能目录（`~/.agents/skills/<名> -> <别处>`）能不能被三者发现，**都没测过**——装好之后
-用上表的方法各看一眼。
+**被推翻的旧说法，留在这里别删**：同一天早些时候这一行写的是「agy **不发现**用户级技能」，推论是「派 agy 时，
+指令里写明要它读的技能的绝对路径」。当时只测了 `~/.agents/skills/`——那一半是对的——就把「这个目录不扫」推广成
+了「用户级都不扫」，没去查 agy 自己的全局技能目录。绝对路径那条变通因此作废：它会把一个装对位置就能消除的问题，
+固化成每条指令都要带的额外负担。下一个看到「agy 找不到技能」的人，先查它是不是装进了 `~/.gemini/config/skills/`，
+别把绝对路径加回来。
+
+**什么观测会推翻本表**：
+- agy 改了全局技能目录，或开始扫 `~/.agents/skills/` ⇒ 改 agy 那行和安装步骤。复核方法：安装后在空目录里让
+  agy 列一次技能。
+- OpenCode 某版本的 `opencode debug skill` 不再列出 `~/.agents/skills/…` ⇒ 改 OpenCode 那行。
+
+软链的用户级技能目录：agy 在 `~/.gemini/config/skills/` 下已测过软链可用；Claude Code、OpenCode 在
+`~/.agents/skills/<名> -> <别处>` 这种形状下**没测过**——装好之后用上表的方法各看一眼。

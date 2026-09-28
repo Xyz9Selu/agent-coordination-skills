@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 #
-# check-env.sh —— 把本机 herdr 与各 agent CLI 的版本，和 herdr-agents 技能里标注的实测版本对一遍。
+# check-env.sh —— 把本机 herdr 与各 agent CLI 的版本，和 herdr-agents 技能里标注的实测版本对一遍；
+# 再看三份技能（herdr-agents / github-backlog / dispatch）在两处用户级目录里各在不在：
+#   ~/.agents/skills/<名>          Claude Code（经 ~/.claude/skills）、OpenCode 从这里找
+#   ~/.gemini/config/skills/<名>   agy 从这里找（它不扫 ~/.agents/skills/，见 SKILL.md §8）
 #
 # 只读：不装、不改、不建任何东西。版本不同只提醒，不拦——技能里的每条实测都绑在一个版本上，
 # 版本变了意味着那些条目该复测，不意味着不能用。
@@ -57,5 +60,18 @@ if command -v claude >/dev/null 2>&1; then report claude "" "$(claude --version 
 if command -v agy >/dev/null 2>&1; then report agy "$TESTED_AGY" "$(agy --version 2>&1)"; found=1; fi
 if command -v opencode >/dev/null 2>&1; then report opencode "$TESTED_OPENCODE" "$(opencode --version 2>&1)"; found=1; fi
 [ "$found" -eq 1 ] || echo "⚠ claude / agy / opencode 一个都没找到——没有可以起的 agent。"
+
+echo
+echo "技能安装位置（SKILL.md §8：用户级要链两处）："
+for d in "$HOME/.agents/skills" "$HOME/.gemini/config/skills"; do
+  for n in herdr-agents github-backlog dispatch; do
+    if [ -f "$d/$n/SKILL.md" ]; then
+      echo "✅ $d/$n"
+    else
+      echo "⚠ $d/$n 不在 —— 从这个目录找技能的 harness 看不见它"
+    fi
+  done
+done
+[ -f "$HOME/.claude/skills/herdr-agents/SKILL.md" ] || echo "ℹ ~/.claude/skills/herdr-agents 不在：Claude Code 需要 ~/.claude/skills 指向 ~/.agents/skills，或在其下再建软链"
 
 exit "$rc"

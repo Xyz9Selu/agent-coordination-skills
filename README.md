@@ -14,7 +14,7 @@
 
 | 脚本 | 属于 | 干什么 | 写东西吗 |
 |---|---|---|---|
-| `herdr-agents/scripts/check-env.sh` | herdr-agents | 本机 herdr / claude / agy / opencode 版本 vs 技能里的实测版本 | 不写 |
+| `herdr-agents/scripts/check-env.sh` | herdr-agents | 本机 herdr / claude / agy / opencode 版本 vs 技能里的实测版本；三份技能在 `~/.agents/skills/`、`~/.gemini/config/skills/` 各装没装 | 不写 |
 | `github-backlog/scripts/bootstrap.sh` | github-backlog | 检查 gh 与仓库；列出缺的标签，确认后才建（`--check` 只列） | 确认后建标签 |
 | `github-backlog/scripts/claim-issue.sh` | github-backlog | 认领、只读检查（`--check`）、`--self-test` | 认领时写 Issue |
 | `dispatch/scripts/scan-collisions.sh` | dispatch | 迁移号 / ADR 编号跨分支撞号扫描（`MIGRATION_DIR`、`ADR_DIR` 必须给） | 不写 |
@@ -25,21 +25,28 @@
 
 ```bash
 git clone <repo-url> ~/src/coordinator-skills
-mkdir -p ~/.agents/skills
+mkdir -p ~/.agents/skills ~/.gemini/config/skills
 for s in herdr-agents github-backlog dispatch; do
-  ln -s ~/src/coordinator-skills/$s ~/.agents/skills/$s
+  ln -s ~/src/coordinator-skills/$s ~/.agents/skills/$s          # Claude Code、OpenCode
+  ln -s ~/src/coordinator-skills/$s ~/.gemini/config/skills/$s   # agy
 done
+~/.agents/skills/herdr-agents/scripts/check-env.sh              # 核版本，并列出两处各装没装
 ```
 
-各 harness 从哪里找技能（2026-09-28 实测，细节与推翻条件见 `herdr-agents` §8）：
+**为什么要链两处**：各 harness 从哪里找用户级技能不一样（2026-09-28 实测，细节与推翻条件见 `herdr-agents` §8）：
 
-| harness | 用户级 | 备注 |
+| harness | 用户级技能目录 | 备注 |
 |---|---|---|
 | Claude Code | `~/.claude/skills/` | 让 `~/.claude/skills` 指向 `~/.agents/skills`，或在其下再建软链 |
 | OpenCode 1.18.32 | `~/.agents/skills/` 与 `~/.claude/skills/` 都扫 | `opencode debug skill` 可查 |
-| agy 1.2.12 | **不发现用户级技能**，只扫工作区 `.agents/skills/` | 派 agy 时在指令里写 `SKILL.md` 的绝对路径（`dispatch` 已要求） |
+| agy 1.2.12 | `~/.gemini/config/skills/`（软链也行）；**不扫 `~/.agents/skills/`** | 在空目录里让 agy 列一次技能可复核 |
 
-**软链的用户级技能目录**能不能被三者发现，没测过。装完用上表的方法各看一眼。
+agy 那一行的观测：探针技能放在 `~/.gemini/config/skills/<名>/SKILL.md`，在空目录里让 agy 列技能（明确要求不调用工具），
+列表里出现；换成指向别处的软链，照样出现；同一个探针放在 `~/.agents/skills/` 则不出现。**推翻条件**：agy 改了全局技能
+目录，或开始扫 `~/.agents/skills/`——那时只链 `~/.agents/skills/` 一处就够。
+
+Claude Code、OpenCode 对 `~/.agents/skills/<名> -> <别处>` 这种软链形状没测过。装完跑一次 `check-env.sh`，再用上表的方法
+各看一眼。
 
 官方 `herdr` 技能要另外装：`herdr-agents` 只写它没写的东西。
 

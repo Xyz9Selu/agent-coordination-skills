@@ -266,6 +266,26 @@ working 超过一小时，改成 `recent --lines 12` 才读对。那次同时把
 
 **对每个活着的 agent 读回滚佐证，不能只信 `agent_status`。**
 
+### 陷阱 ③a agy 的 `agent_status`：后台 shell 在跑就算 working，接口报错也算 working
+
+herdr 对 agy 没有生命周期 hook，状态只靠屏幕 manifest（herdr 0.9.1 文档「Agents」表：Antigravity CLI 的
+integration 只管会话恢复，不管状态，装了也不改变这一点）。当时生效的 manifest（`agy.toml`
+`2026.06.24.1`，`herdr agent explain --json` 报 `remote_update_status: current`，即上游最新）里有一条
+`background_tasks_working`：底部出现 `· N task` 就判 working。可是那个数字是**后台 shell 个数**，worker
+起着 dev server 就一直大于 0。
+
+2026-09-29 08:2x 实测：三个已做完、停在输入框等人的 agy worker（底部 `2 task(s)`，两个 dev server），
+`herdr agent explain` 全报 `working`，命中的正是这条规则。manifest 里也没有任何一条能认出
+`Internal error encountered`，所以接口报错停住的 agy 同样报 working（09-28/29 当夜三次）。
+
+所以 agy 的 `agent_status`、`agent wait`、`events.subscribe` 的 `pane.agent_status_changed` 都会被这条
+规则带偏。判 agy 在不在干活，看底部有没有 `esc to cancel`，读法见 dispatch `patrol.md`「屏幕怎么判」。
+
+**这是上游行为，能改的在上游**：herdr 支持本地覆盖 `~/.config/herdr/agent-detection/agy.toml`（覆盖永远
+优先），也可以给 herdr 报 issue。改之前先 `herdr agent explain --json` 看 manifest 版本有没有变。
+**推翻条件**：manifest 版本变了且 `explain` 对「空闲 + 后台 dev server」的 agy 报 `idle`、对接口报错报
+非 working——那就删掉这一条，并把 dispatch 看门脚本里自己的屏幕规则换成 herdr 的状态。
+
 ### `herdr agent list` 只看得见 herdr 自己起的 agent
 
 agent 退出后会**从列表里消失**，pane 变 `unknown`，死活可判。但 herdr 只看得见它自己起的 pane ——

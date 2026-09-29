@@ -22,6 +22,7 @@
 | `github-backlog/scripts/bootstrap.sh` | github-backlog | 检查 gh 与仓库；列出缺的标签，确认后才建（`--check` 只列） | 确认后建标签 |
 | `github-backlog/scripts/claim-issue.sh` | github-backlog | 认领、只读检查（`--check`）、`--self-test` | 认领时写 Issue |
 | `dispatch/scripts/scan-collisions.sh` | dispatch | 迁移号 / ADR 编号跨分支撞号扫描（`MIGRATION_DIR`、`ADR_DIR` 必须给） | 不写 |
+| `dispatch/scripts/watch-workers.sh` | dispatch | coordinator 的看门脚本：定时快照每个 worker 的进程 / 屏幕 / head / 交付物，值得叫醒时退出（`--once`、`--rebaseline`、`--stop`） | 只写自己的状态文件 |
 
 `/dispatch bootstrap` = 跑 `check-env.sh`，再跑你所配工作流的 bootstrap（配 GitHub 就是 `bootstrap.sh`）。
 

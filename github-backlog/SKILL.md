@@ -248,6 +248,8 @@ gh issue comment <N> --body 'release: <reason>'
 
 Release when: you drop the Issue, the grill ends unclear, the scope moves elsewhere, or you end a session without opening a PR. A merged PR needs no release — `Closes #N` closes the Issue.
 
+**Only the leading prefix is machine-readable.** `claim-issue.sh`, and any other session reading the thread, decides an Issue's state by matching `claim:` / `release:` / `reclaim:` against the *start* of each comment body — nothing else. A comment that explains the same intent but opens with bold text, a different language, or plain prose is invisible to that check, no matter how unambiguous its meaning is to a human reader. Observed 2026-08-31: a comment intended to both reclaim and release two stale claims (it also cleared the assignee and the `In progress` label) opened with bold Chinese prose instead of a prefix. Every script and session that read the thread afterward still counted both old claims as open, because the reset they were relying on had no `release:`/`reclaim:` to match — the confusion surfaced 2026-09-28, four weeks later, when a new worker's `claim-issue.sh` run had to sort it out by hand. What would overturn this: a version of `claim-issue.sh` (or of this protocol) that recognizes a state change from comment content rather than its leading prefix — until then, a comment that does not lead with one of the three prefixes does not change an Issue's claimed state, regardless of what it says.
+
 ### 5. Reclaim stale holds
 
 A claim is stale on either of two independent grounds:

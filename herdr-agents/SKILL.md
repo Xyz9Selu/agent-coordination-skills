@@ -93,7 +93,7 @@ done
   对话框、`--lines 20` 读不读得到它，**没测过**。
 
 **完成判据：** 循环是因为匹配到 banner 特征串而 `break` 的，不是因为跑满 60 次。跑满了就是没就绪，
-先 `pane read --source visible` 看画面停在哪，别发。
+先 `pane read --source visible` 看画面停在哪，别发——看之前先确认这个 pane 没被滚上去（陷阱 ④b）。
 
 **什么观测会推翻本节**：轮询到 banner 之后发出的 prompt 仍然丢；或者立即发能稳定成功；新 worktree 里
 启动 agy 不再弹信任对话框；banner 不再带版本号。任一出现，按 `startup-evidence.md` 里对应的推翻条件
@@ -201,6 +201,62 @@ transcript 位置；其它 kind 的对应物没有记录。）
 > 所以：**确认启动、看对话框用 `visible`；回读较长的对话历史、确认指令落在 banner 之后，用
 > `recent-unwrapped` 并给足行数。** 推翻条件：`visible` 在某个 kind 上再次读回空白，而同一时刻
 > `recent-unwrapped` 读得到——记下 `herdr --version` 与 kind。
+>
+> 上面「`visible` = 当前这一屏」**少说了一半**，2026-09-29 补在下面 ④b。「确认启动用 `visible`」仍然
+> 成立，但只在 pane 停在底部时成立。
+
+### 陷阱 ④b `visible` 跟着 pane 的滚动位置走，滚上去就冻成旧画面
+
+**现象（2026-09-28 17:50 前后，coordinator 驱动 agy worker）：** `visible` 一直显示「输入框里还躺着
+刚发的指令、上面是很早以前的输出」，于是以为没提交，多按了几次 Enter 又重发。同一时刻
+`recent --lines 400` 显示指令早已提交、agent 在干活；`herdr agent explain` 也报 working。
+
+**原因：** `visible` 读的是 pane **当前滚动位置**那一屏，不是屏幕底部。有人把 pane 往上滚了（多半是
+人在 herdr 界面里滚了滚轮，也可能是 copy mode）又没滚回底部，`visible` 就返回那个位置的旧内容。新输出
+进来时 herdr 会自动加大偏移量，让那一屏钉在原处——所以它**能一直旧下去**，发指令、按 Enter 都不会把它
+拉回底部。agy 把每条已提交的指令回显成「一条分隔线 + `> 指令原文`」，冻住的画面恰好停在这里时，和
+「指令还在输入框里没发出去」一模一样。`recent` / `recent-unwrapped` / `detection`（`agent_status` 和
+`agent explain` 用的就是它）都从底部读，不受滚动位置影响，这就是为什么它们当时是对的。
+
+**怎么判断：** `herdr pane get <p>` 返回的 `scroll.offset_from_bottom`。`0` = 在底部，此时 `visible` 与
+`recent --lines <viewport_rows>` 内容一致；不为 `0` = `visible` 是旧画面，别信。
+
+```bash
+off=$(herdr pane get <p> | jq '.result.pane.scroll.offset_from_bottom')
+[ "$off" = 0 ] || echo "pane 被滚上去了 ($off 行)，visible 是旧画面，改读 recent"
+```
+
+**怎么做：**
+- 判断「送到了没 / 在不在干活 / 停在哪」一律读 `recent`（或 `recent-unwrapped`）并给足行数，不用
+  `visible`。巡检也一样。
+- 只有要看「画在屏幕顶部、光标在下方」的东西（信任对话框，陷阱 ①a）才用 `visible`，并且先确认
+  `offset_from_bottom` 为 0。也可以改用 `recent --lines <viewport_rows>`：它不受滚动影响，也能读到
+  对话框，代价是会多带进一两行上一屏的历史（同一 pane 里以前起过 agy 时，理论上可能误匹配旧 banner，
+  没实测撞到过）。
+- 不要替人把 pane 滚回底部：那会改掉人正在看的界面。
+
+**怎么测出来的（2026-09-29，herdr 0.9.1，新开的 workspace 里一个普通 shell pane 和一个 agy 1.2.x）：**
+1. 在底部时连续采样 10 次，`visible` 与 `recent` 的最后一行每次都一样（差一行也只是两次读之间新打出
+   的那一行）——`visible` 本身没有延迟。
+2. 用 socket API 的 `pane.scroll` 把 pane 往上滚 150 行：`visible` 立刻变成 S105–S151 那一段，
+   `recent --lines 3` 仍是最后几行，`detection` 仍是底部。
+3. 滚着不动再打 50 行新输出：`offset_from_bottom` 从 150 自动涨到 201，`visible` 仍是 S105–S151。
+4. 对 agy：滚上去 20 行后发一条新指令，agent 跑完（`agent_status` done），`visible` 连续 24 秒都是上一轮
+   的输出，一行新内容都没有；`recent` 读到了全部新输出。把偏移调到 76 行时，`visible` 底部正好是
+   「上一轮输出 + 分隔线 + `> 指令原文`」——就是 17:50 那次看到的画面。
+5. 滚回 0：`visible` 与 `recent --lines 47`（47 = viewport_rows）逐字相同。
+
+**上游：** 0.9.1 是写下时的最新正式版，之后两个 preview（09-21、09-28）的提交里没有改 `visible` 语义的；
+issue 列表里没有人报过「`visible` 跟随滚动位置」。文档对 `visible` 只写了「Current rendered screen」，
+按字面理解它这样做不算 bug，升级不会让它消失。
+
+**什么观测会推翻本条：** `offset_from_bottom` 为 0 时 `visible` 仍然给出比 `recent` 旧的画面（那说明还有
+别的原因）；或者 pane 被滚上去时 `visible` 仍返回底部内容（说明 herdr 改了语义，先核 `herdr --version`）。
+
+**还没拆开的一次观测（2026-09-29 01:10 前后）：** 巡检脚本用 `visible | tail -4` 对 5 个 agy 连续报
+working 超过一小时，改成 `recent --lines 12` 才读对。那次同时把 agy 状态栏右下角的「N task(s)」当成了
+在干活——在底部时 agy 的最后 4 行只有输入框和状态栏，看不出忙不忙，所以更像是「只看 4 行 + 判据错」，
+不一定是 `visible` 冻住了。事后那 5 个 pane 已关，没法再查它们当时的滚动位置。
 
 ### 陷阱 ③ `agent_status` 是刮终端画面得来的，会抖
 

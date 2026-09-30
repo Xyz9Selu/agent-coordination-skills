@@ -214,6 +214,8 @@ gh issue view <N> --json assignees,comments \
 
 If more than one unreleased `claim:` comment exists, **the earliest timestamp wins**. The loser releases and re-selects. No negotiation, no waiting.
 
+"Unreleased" means **posted after the last `release:` or `reclaim:`** — both end every claim before them (step 5 posts the reclaim before the new claim). Counting every `claim:` in the history instead turns any claim → release → claim into a phantom race; `claim-issue.sh` did exactly that until 2026-09-30 and stopped two workers holding sole claims. Its `--self-test` now covers these sequences — if you change the reclaim protocol, change `OPEN_CLAIMS_JQ` with it.
+
 Before concluding you are the earliest, check the earlier holder's liveness:
 
 ```bash

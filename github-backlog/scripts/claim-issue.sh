@@ -111,6 +111,24 @@ claim_body() {
     "$branch" "$ts" "$worktree" "$host" "$sid" "$pid" "$sock"
 }
 
+# The claims still open on an Issue, as a jq filter over `gh issue view --json
+# comments`: every `claim:` posted after the last `release:` or `reclaim:`.
+# Both end the claims before them — a release by its holder, a reclaim by
+# superseding them (the skill's step 5 posts the reclaim *before* the new
+# claim). More than one open claim after our own write is a race.
+#
+# Replaced (2026-09-30): "0 if the last marker is a release, else every claim
+# and reclaim ever posted". It never looked for the *last* boundary, so any
+# claim → release → claim read as a race, and a documented reclaim counted the
+# reclaim marker itself as a claim. What would overturn this: the skill's
+# reclaim protocol stops posting `reclaim:` before `claim:` — then a reclaim is
+# no longer a boundary and this filter must change with it.
+OPEN_CLAIMS_JQ='
+  [.comments[] | select(.body|test("^(claim|reclaim|release):"))]
+  | ([.[] | .body | test("^(release|reclaim):")] | indices(true) | last) as $b
+  | .[(if $b == null then 0 else $b + 1 end):]
+  | [.[] | select(.body|test("^claim:"))]'
+
 field() {  # field <name> <text>
   printf '%s\n' "$2" | sed -n "s/.*[[:space:]]$1:[[:space:]]*\([^[:space:]]*\).*/\1/p" | head -1
 }
@@ -292,6 +310,25 @@ self_test() {
   sid="$orig_sid"
   [ -n "$temp_sock_dir" ] && rm -rf "$temp_sock_dir"
 
+  # Open-claim counting. Observed 2026-09-30: claim → release → claim read as
+  # "2 unreleased claims" and stopped two workers whose claims were sole holds.
+  check_open() {  # check_open <expected-count> <label> <comment-kind>...
+    local expected="$1" label="$2"; shift 2
+    local json
+    json="$(python3 -c 'import json,sys; print(json.dumps({"comments":[{"body":k+": x","createdAt":"t%d"%i} for i,k in enumerate(sys.argv[1:])]}))' "$@")"
+    got="$(jq "$OPEN_CLAIMS_JQ | length" <<<"$json")"
+    if [ "$got" = "$expected" ]; then printf 'ok   %s\n' "$label"
+    else printf 'FAIL %s\n       expected: %s open\n       got:      %s\n' "$label" "$expected" "$got"; fails=$((fails+1)); fi
+  }
+  check_open 1 "sole claim"                                  claim
+  check_open 2 "two claims, no release ⇒ race"               claim claim
+  check_open 0 "claim then release ⇒ none open"              claim release
+  check_open 1 "claim, release, claim ⇒ only the new one"    claim release claim
+  check_open 2 "race after a release is still a race"        claim release claim claim
+  check_open 1 "documented reclaim ⇒ only the new claim"     claim reclaim claim
+  check_open 2 "race after a reclaim is still a race"        claim reclaim claim claim
+  check_open 1 "non-protocol comments are ignored"           claim note release note claim
+
   [ "$fails" -eq 0 ] && echo "all liveness cases pass" || echo "$fails case(s) FAILED"
   return "$fails"
 }
@@ -351,15 +388,11 @@ for n in "${issues[@]}"; do
 
   # ---- verify: the assignee write cannot fail, so this is the only place a
   # ---- collision surfaces.
-  open_claims="$(gh issue view "$n" --json comments --jq '
-    [.comments[].body | select(test("^(claim|reclaim|release):"))]
-    | (if (last | test("^release:")) then 0
-       else [.[] | select(test("^(claim|reclaim):"))] | length end)')"
+  comments_json="$(gh issue view "$n" --json comments)"
+  open_claims="$(jq "$OPEN_CLAIMS_JQ | length" <<<"$comments_json")"
   if [ "${open_claims:-0}" -gt 1 ]; then
     echo "  ⚠ $open_claims unreleased claims on #$n — EARLIEST TIMESTAMP WINS."
-    gh issue view "$n" --json comments --jq '
-      .comments[] | select(.body|test("^(claim|reclaim):"))
-      | "    \(.createdAt)  \(.body | split("\n")[0])"'
+    jq -r "$OPEN_CLAIMS_JQ"' | .[] | "    \(.createdAt)  \(.body | split("\n")[0])"' <<<"$comments_json"
     echo "  If yours is not the earliest: release it and re-select."
     rc=1
   fi

@@ -12,7 +12,8 @@
 用户挑中之后：
 
 ```bash
-herdr worktree create --cwd <repo根> --branch grill/<议题短名> --base main \
+# 分支名不带阶段：issue/<N>-<短名>，grill 和实施同一条（见下文「grill 完在原分支继续做」）
+herdr worktree create --cwd <repo根> --branch issue/<N>-<短名> --base main \
   --label "GRILL #<N> · <短名>"                       # 命名见 SKILL.md「命名与标记」
 herdr tab rename <tab_id> "GRILL #<N> · <短名>"
 herdr agent start grill-<N>-<短名> --kind claude --pane <root_pane> --timeout 60000 -- --model opus
@@ -115,8 +116,16 @@ herdr agent prompt grill-<N>-<短名> '/grill-with-docs <这批活的号 + 你�
 
 1. **实施前必须占住。** grill 阶段不需要占住，一旦转入实施就需要——即使还是同一个 agent、同一条分支。
    2026-08-26 实跑：一批三件活在开始实施前都是「还没占」，也就是说盘面上没人知道这几件活正在被做，不占住
-   就是结构性隐形。分支名沿用 `grill/<议题>`、不改成 `fix/<N>`——**接受现状**，但占住记录里的分支名必须
-   与它一致（Q4），否则会被同伴当成过期的占住抢走。
+   就是结构性隐形。**分支名从开 grill 那一刻起就不带阶段：`issue/<N>-<短名>`**（例如 `issue/927-labor-spec-mapping`），grill 和
+   实施用的是同一条分支，占住记录里的分支名从头到尾不变。阶段只体现在 workspace / tab / agent 名上（`GRILL` → `WORKER`，
+   改名是一条命令）。*2026-10-13 John 定。为什么：分支名改起来代价高——开着 PR 时 GitHub 会跟着改，但别的会话本地
+   的 worktree、claim 评论里记的分支名都会失效——而同一条分支要从讨论一直用到实施完，带 `grill/` 的名字在实施阶段
+   名不副实。推翻条件：GitHub / herdr 有了不影响别处的分支改名方式，或 grill 不再在原分支接着实施。*
+   **旧说法（留着，免得有人加回去）**：「分支名沿用 `grill/<议题>`、不改成 `fix/<N>`——接受现状，但占住记录里的
+   分支名必须与它一致（Q4），否则会被同伴当成过期的占住抢走。」那是 2026-08-26 把 grill 和实施合并到同一条分支
+   时的权宜：分支已经叫 `grill/…`，改名代价高，于是接受现状并补一条一致性提醒。从一开始就用不带阶段的名字，这条
+   提醒要防的不一致就不会出现。
+
 2. **冲突复检不取消，只是提前。** 让 grill 交回来这条旧规矩，真实理由从来不是「上下文干净」（那只是次要
    好处），而是：**这件活的影响面刚刚才第一次变得可算，必须拿去和盘面上所有在飞的分支重新比一遍**——它当初
    进「需先 grill」桶正是因为算不出来，现在算得出了就必须做这一步，否则可能正好撞上某个已经在跑的 worker。

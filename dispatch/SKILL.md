@@ -94,6 +94,7 @@ herdr pane rename <你自己的 pane_id> "⚙ COORDINATOR — 勿占用"
 | herdr agent 名 | `agent start <名>` | `worker-<N>-<短名>` | `grill-<N>-<短名>` |
 | workspace 标签 | `worktree create --label` | `WORKER #<N> · <短名>` | `GRILL #<N> · <短名>` |
 | tab 标签 | `tab rename <tab_id>` | 同 workspace 标签 | 同 workspace 标签 |
+| git 分支名 | `worktree create --branch` | `issue/<N>-<短名>` | `issue/<N>-<短名>`（**同一条**，转实施不换、不改名；见 `grill.md`「grill 完在原分支继续做」） |
 
 `<N>` 是这件活在工作流里的编号（没配工作流就用你给清单项编的号）。`<短名>` 用两三个连字符词概括那件事
 （`fx-rate-gate`、`leave-quota`），不要用任务标题原文。一批多个任务时用领头号加数量：

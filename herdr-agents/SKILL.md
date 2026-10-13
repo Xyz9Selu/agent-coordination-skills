@@ -53,6 +53,36 @@ agy 的模型名：`gemini-3.8-flash-high` 是写下时（2026-09-17/18）最新
 - **`herdr agent rename <pane_id> <名字>` 可用**（2026-08-26 实测）。在 herdr 之外直接起的 agy 在
   `agent list` 里是 `name=None`，按名字发不了 prompt；用 pane id 当 target 补个名字就能寻址了。
 
+### opencode kind：启动目录就是它的项目根，要把 worktree 路径直接传给它
+
+    herdr agent start <名> --kind opencode --pane <p> --timeout 90000 -- \
+        --model opencode-go/deepseek-v4.1-flash /home/xyz/.herdr/worktrees/<repo>/<worktree>
+
+`opencode [project]` 的位置参数就是项目目录（`opencode --help`：「project  path to start opencode in」）。
+**先建好 worktree，再用它的路径起 OpenCode**；手册、结果文件放在别处（如 `~/.cache/smops-runs/…`）照常用
+绝对路径读写，那一处会弹一次权限框，可以接受。
+
+**为什么。** OpenCode 把「启动目录以外」的路径一律走 `external_directory` 权限，每碰一个新子目录弹一次
+`Allow once / Allow always / Reject`；`Allow always` 只放行**那一个子目录**的 pattern（例如
+`…/cmp-ds/frontend/tests/e2e/*`），读到 `…/backend/app/services` 又问一遍。选 Allow always 后还会再弹一个
+「This will allow the following patterns until OpenCode is restarted — Confirm / Cancel」，要再按一次 Enter
+才放行；OpenCode 重启后这些放行全部失效。**启动之后改不了项目目录**：TUI 里没有 `/cd` 一类命令，让它在
+bash 里 `cd` 只改那条命令的 shell，权限检查仍按启动目录算；自定义命令（`commands/`）也在项目根目录运行。
+
+**何时观测、怎么测的。** 2026-10-13，OpenCode 1.18.34 + herdr 0.9.3，smart-manu-ops #957 的执行者对比：
+OpenCode（deepseek v4.1 flash）被起在 `~/.cache/smops-runs/runner-compare/`，在
+`~/.herdr/worktrees/smart-manu-ops/cmp-ds` 里跑 26 条 e2e 要点，弹了 7 次以上权限框（每次一个新子目录）；
+同时、同手册、同类目录布局的 Claude Code（Haiku，auto mode）0 次。前一天 #916 / #944 的 OpenCode 执行者
+同样起在运行目录、同样逐目录弹框。
+
+**否掉的做法。** ① 在 `~/.config/opencode/opencode.json` 加 `"permission": {"external_directory":
+{"<路径>/**": "allow"}}`——官方支持，但改的是全局配置，影响所有项目的 OpenCode；② `--auto`（帮助里写着
+「auto-approve permissions that are not explicitly denied (dangerous!)」），放行范围太宽。
+
+**什么观测会推翻本节：** OpenCode 新版本有了会话内切换项目目录的命令；`Allow always` 改成放行整棵目录树；
+或者按本节起在 worktree 里，读写 worktree 仍然弹 `external_directory` 框。任一出现，记下
+`opencode --version` 重测。
+
 ### 陷阱 ① `agent start` 返回时 TUI 还没接管终端，此时发出的 prompt 会丢 —— 而 `--wait` 有四分之一的概率谎报成功
 
 **`agent start` 返回的 `interactive_ready: true` 对 agy 是过早的。** 它说的是 pane 里的进程起来了，

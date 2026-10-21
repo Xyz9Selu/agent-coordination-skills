@@ -12,12 +12,12 @@
 #
 # 退出码：0 = herdr 在（其余只是提醒）；1 = 没有 herdr，本技能无从谈起。
 #
-# 下面的实测版本必须与 SKILL.md / startup-evidence.md 里写的一致；改了那边的实测，就改这里。
+# 下面的实测版本必须与 SKILL.md / HISTORY.md 里写的一致；改了那边的实测，就改这里。
 set -uo pipefail
 
 TESTED_HERDR="0.9.5"      # SKILL.md「版本绑定」里最新的一批实测（2026-10-21）；更早的条目绑在 0.8.0 / 0.9.1，见那一节
 TESTED_CLAUDE="2.1.306"   # SKILL.md §1「claude kind」、§2（2026-10-21）
-TESTED_AGY="1.2.12"       # startup-evidence.md ①a、SKILL.md §8
+TESTED_AGY="1.2.12"       # HISTORY.md #6、SKILL.md §8
 TESTED_OPENCODE="1.18.32" # SKILL.md §8（技能发现）
 
 case "${1:-}" in

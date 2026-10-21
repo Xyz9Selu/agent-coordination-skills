@@ -9,8 +9,7 @@ description: Use when driving another coding agent (claude / agy / opencode) thr
 `agent prompt` / `pane read` 的基本用法、名字的正则、安全规则都在那里，这里不重复。
 
 本技能只写官方没写的东西：**实测出来的启动序列、送达确认、回读、打断、agent 之间通信，以及每一个
-返回值不会告诉你的坑。** 官方的描述和这里带日期的实测冲突时，先核版本（见「版本绑定」），再以
-这里的实测为准。
+返回值不会告诉你的坑。** 官方的描述和这里的实测冲突时，先核版本（见「版本绑定」），再以这里的实测为准。
 
 第一次在一台机器上用：跑一次 `scripts/check-env.sh`，它把本机 herdr 与各 agent CLI 的版本和本技能
 标注的实测版本对一遍，不同就提醒（只读，不拦、不装任何东西）。
@@ -18,18 +17,13 @@ description: Use when driving another coding agent (claude / agy / opencode) thr
 ## 版本绑定
 
 > **每条都绑在一个 herdr 版本上。** 下面「已知陷阱」多数条目实测于 **0.8.0**，**未在 0.9.x 上复测**；
-> 陷阱 ① 的现状实测于 **0.9.1**（对 agy 仍复现，见下）；带 2026-10-21 日期的 claude kind 条目实测于
-> **0.9.5 + Claude Code 2.1.306**。发现某条对不上时，先核 `herdr --version` 与
-> `https://herdr.dev/latest.json` 的发布说明——上游可能已经修了，那就该升级，而不是在这里
-> 加一条新的变通写法。
+> 陷阱 ① 的现状实测于 **0.9.1**；claude kind 的条目实测于 **0.9.5 + Claude Code 2.1.306**。发现某条对不上时，
+> 先核 `herdr --version` 与 `https://herdr.dev/latest.json` 的发布说明——上游可能已经修了，那就该升级，而不是
+> 在这里加一条新的变通写法。但发布说明说修了，不等于这条路径修了：要实测。
 >
-> **被推翻的旧说法**：这里原先写「陷阱 ① 已随 **0.9.0** 修复」。依据是 0.9.0 的发布说明（「`agent prompt`
-> now reliably sends the prompt and Enter before reporting successful submission」），没有实测；2026-09-22
-> 在 0.9.1 上对 agy 做的对照实验仍然复现（立即发 0/4），见陷阱 ① 和 `startup-evidence.md`「版本」。发布说明
-> 说修了，不等于这条路径修了。
+> 曾是「陷阱 ① 已随 0.9.0 修复」（只凭发布说明），已推翻，见 HISTORY #4。
 
-「已知陷阱」这一组条目最早是 2026-08-25 实测记下的，返回值都不会告诉你。下面按用途分节，
-编号 ①–⑦ 保留原来的编号，方便和旧记录对照。
+下面按用途分节，陷阱编号 ①–⑦ 保留原来的编号，方便和旧记录对照。
 
 ## 1 · 起 agent，确认它真的就绪
 
@@ -41,7 +35,7 @@ description: Use when driving another coding agent (claude / agy / opencode) thr
     # 返回 argv: ['claude', '--model', 'opus']
 
 **claude kind：herdr 起的独立 session 省略 `--model` 不会继承你的模型**，会去读
-`~/.claude/settings.json`（写下时那台机器上是 `sonnet`）——该显式传的地方必须传，否则拿去做架构
+`~/.claude/settings.json`（见 HISTORY #8）——该显式传的地方必须传，否则拿去做架构
 判断的 agent 会悄悄落在低一档的模型上。（只有 Claude Code 自己的 Agent 工具省略 `model` 才继承
 调用方。）
 
@@ -54,9 +48,9 @@ agy 的模型名：`gemini-3.8-flash-high` 是写下时（2026-09-17/18）最新
 
 - 违反时 `agent start` 返回 `invalid_agent_name`（这是工具直接吐出来的硬约束，不是观测）。`WORKER-476` 这种写法会被拒：
   大写也不行，不只是空格。
-- `herdr worktree create --label` 与 `herdr tab rename` 的标签**可以**带空格、`#`、`·`、中文（2026-08-25
-  实测通过）。所以**标签给人看、agent 名给命令用**。
-- **`herdr agent rename <pane_id> <名字>` 可用**（2026-08-26 实测）。在 herdr 之外直接起的 agy 在
+- `herdr worktree create --label` 与 `herdr tab rename` 的标签**可以**带空格、`#`、`·`、中文（实测，见 HISTORY #8）。
+  所以**标签给人看、agent 名给命令用**。
+- **`herdr agent rename <pane_id> <名字>` 可用**（实测）。在 herdr 之外直接起的 agy 在
   `agent list` 里是 `name=None`，按名字发不了 prompt；用 pane id 当 target 补个名字就能寻址了。
 
 ### opencode kind：启动目录就是它的项目根，要把 worktree 路径直接传给它
@@ -68,22 +62,10 @@ agy 的模型名：`gemini-3.8-flash-high` 是写下时（2026-09-17/18）最新
 **先建好 worktree，再用它的路径起 OpenCode**；手册、结果文件放在别处（如 `~/.cache/<运行目录>/…`）照常用
 绝对路径读写，那一处会弹一次权限框，可以接受。
 
-**为什么。** OpenCode 把「启动目录以外」的路径一律走 `external_directory` 权限，每碰一个新子目录弹一次
-`Allow once / Allow always / Reject`；`Allow always` 只放行**那一个子目录**的 pattern（例如
-`…/cmp-ds/frontend/tests/e2e/*`），读到 `…/backend/app/services` 又问一遍。选 Allow always 后还会再弹一个
-「This will allow the following patterns until OpenCode is restarted — Confirm / Cancel」，要再按一次 Enter
-才放行；OpenCode 重启后这些放行全部失效。**启动之后改不了项目目录**：TUI 里没有 `/cd` 一类命令，让它在
-bash 里 `cd` 只改那条命令的 shell，权限检查仍按启动目录算；自定义命令（`commands/`）也在项目根目录运行。
-
-**何时观测、怎么测的。** 2026-10-13，OpenCode 1.18.34 + herdr 0.9.3，smart-manu-ops #957 的执行者对比：
-OpenCode（deepseek v4.1 flash）被起在 `~/.cache/smops-runs/runner-compare/`，在
-`~/.herdr/worktrees/smart-manu-ops/cmp-ds` 里跑 26 条 e2e 要点，弹了 7 次以上权限框（每次一个新子目录）；
-同时、同手册、同类目录布局的 Claude Code（Haiku，auto mode）0 次。前一天 #916 / #944 的 OpenCode 执行者
-同样起在运行目录、同样逐目录弹框。
-
-**否掉的做法。** ① 在 `~/.config/opencode/opencode.json` 加 `"permission": {"external_directory":
-{"<路径>/**": "allow"}}`——官方支持，但改的是全局配置，影响所有项目的 OpenCode；② `--auto`（帮助里写着
-「auto-approve permissions that are not explicitly denied (dangerous!)」），放行范围太宽。
+**为什么。** OpenCode 把「启动目录以外」的路径一律走 `external_directory` 权限，每碰一个新子目录弹一次框，
+`Allow always` 只放行那一个子目录，OpenCode 重启后全部失效。**启动之后改不了项目目录**：TUI 里没有 `/cd` 一类
+命令，让它在 bash 里 `cd` 只改那条命令的 shell，权限检查仍按启动目录算。不用全局 `permission` 配置或 `--auto`：
+放行范围太宽（实测与否掉的做法见 HISTORY #9）。
 
 **什么观测会推翻本节：** OpenCode 新版本有了会话内切换项目目录的命令；`Allow always` 改成放行整棵目录树；
 或者按本节起在 worktree 里，读写 worktree 仍然弹 `external_directory` 框。任一出现，记下
@@ -95,17 +77,16 @@ OpenCode（deepseek v4.1 flash）被起在 `~/.cache/smops-runs/runner-compare/`
 不是 agy 的 TUI 已经接管终端。官方技能说 `agent start` 在 herdr「认为它可以交互」后才返回——对 agy
 这条路径不成立。
 
-实测（2026-09-22，herdr 0.9.1，每组 4 次）：`agent start` 后**立即发**，真执行 **0/4**（3 次报
-`agent_prompt_stalled`，**1 次报 `OK` 却根本没执行**）；**轮询到 banner 出现再发**，**4/4**。完整对照
-实验、banner 行号这条铁证、以及我在这个问题上连错的三次结论，见
-[`startup-evidence.md`](startup-evidence.md)——**想改这一节的任何一句之前先读它。**
+实测（herdr 0.9.1）：`agent start` 后**立即发**，真执行 **0/4**（**1 次报 `OK` 却根本没执行**）；**轮询到 banner
+出现再发**，**4/4**。对照实验见 HISTORY #5；这个问题上连错过三次结论，见 HISTORY #7——**想改这一节的任何一句
+之前先读那两条。**
 
 ### 陷阱 ①a 新 worktree 先弹「是否信任此文件夹」，`recent --lines 20` 看不见它
 
 agy 在没信任过的目录里启动（每个新建的 worktree 都是），先出一个「Do you trust the contents of this
 project? > Yes, I trust this folder」对话框，**banner 要等按了 Enter 才出现**。用
 `--source recent-unwrapped --lines 20` 轮询会在这个对话框上**读回全空**，循环空转到超时，prompt 随后
-打进对话框里。原因、测量表、上游核查见 [`startup-evidence.md`](startup-evidence.md) §①a。
+打进对话框里。原因、测量表、上游核查见 HISTORY #6。
 
 ### 怎么做（步骤）
 
@@ -131,8 +112,7 @@ done
 先 `pane read --source visible` 看画面停在哪，别发——看之前先确认这个 pane 没被滚上去（陷阱 ④b）。
 
 **什么观测会推翻本节**：轮询到 banner 之后发出的 prompt 仍然丢；或者立即发能稳定成功；新 worktree 里
-启动 agy 不再弹信任对话框；banner 不再带版本号。任一出现，按 `startup-evidence.md` 里对应的推翻条件
-重做实验，并先核 `herdr --version`。
+启动 agy 不再弹信任对话框；banner 不再带版本号。任一出现，按 HISTORY #5、#6 重做实验，并先核 `herdr --version`。
 
 ### claude kind：特征串、信任框，以及一条命令做完 §1–§2
 
@@ -148,13 +128,9 @@ done
 
   直接按 Enter 会让会话退出，后面发的 prompt 打进裸 shell。**不要假设默认项**：读 `❯` 那一行，不在「Yes」上就
   按 `down`，在了才按 Enter。框出现时 `agent start` 立刻返回 `agent_not_ready`（它看得出被挡住了）。
-  **何时、怎么测的**：2026-10-21，Claude Code 2.1.306 + herdr 0.9.5，三次：一个 job 临时目录、一个 `~/.cache`
-  下的新目录、一个从没用过的仓库的新 herdr worktree，都弹了；一个信任过的仓库的 herdr worktree 没弹。第一次
-  照 agy 的写法直接按 Enter，会话退出了。
   **推翻条件**：Claude Code 改了默认选项或文案（那时 `launch.sh` 的就绪循环会跑满 60 次、报 `NOT READY`，
-  不会误按）；新目录不再弹框。
-  **被推翻的旧说法**：这里原文写的是「claude kind 在新目录里有没有类似的信任对话框，**没测过**」——当时确实
-  没测；`launch.sh` 的前身照 agy 的写法「看到 trust this folder 就按 Enter」，按下去就退出了。
+  不会误按）；新目录不再弹框。实测见 HISTORY #10。
+  曾是「claude kind 有没有信任框没测过」，照 agy 写法直接按 Enter，已推翻（会话会退出），见 HISTORY #10。
 
 ## 2 · 发指令，并确认它送达了、只送达了一次
 
@@ -164,12 +140,12 @@ herdr agent prompt <名> '<指令>' --wait --until working --timeout 12000
 
 ### `--wait` 的返回码不能当证据
 
-实测 4 次立即发里有 1 次返回 `OK` 而指令其实丢了 —— **假阳性**。所以：
+实测 4 次立即发里有 1 次返回 `OK` 而指令其实丢了 —— **假阳性**（HISTORY #5）。所以：
 
 - `agent_prompt_stalled` ⇒ 确实没进去，可以信，重发一次。
 - `OK` ⇒ **什么都不能证明**，必须回读画面确认（下一小节）。
 
-这一条推翻了 2026-09-22 早些时候写过的「没报错就是已落地，不要补发」。那句话是错的。
+曾是「没报错就是已落地，不要补发」，已推翻，见 HISTORY #5。
 
 ### 回读确认 —— 唯一可信的判据，不是可选的补充
 
@@ -181,23 +157,10 @@ herdr pane read <pane_id> --source recent-unwrapped --lines 100
 
 ### 只送达了一次 —— 数 transcript 的内容，不是文件数
 
-**回读和「占住已落地」都抓不住指令被重复投递。** 实测：`herdr agent prompt` 把同一份批次指令投递了
-两次，第二次落进会话启动器，在**同一个 worktree 里**又生成了一个 session，两个 session 并行探查同一批
-文件。回读只能证明「送达了」，不能证明「只送了一次」；占住记录是按任务记的，两个副本共用同一条分支、
-同一个任务，只会出现一条，看不出重复。
+**回读和「占住已落地」都抓不住指令被重复投递**（发生过，见 HISTORY #11）。回读只能证明「送达了」，不能证明
+「只送了一次」；占住记录是按任务记的，两个副本共用同一条分支、同一个任务，只会出现一条，看不出重复。
 
-最早的检查写的是「transcript 文件数增量必须为 1」：
-
-```bash
-ls ~/.claude/projects/<worktree-slug>/*.jsonl | wc -l   # 发之前、发之后各跑一次，增量必须为 1
-```
-
-**必须是增量，不能读绝对值** —— transcript 按路径归档，活得比 worktree 长，同一个 worktree 名字重发
-一次时该目录已经存有旧 transcript，绝对值 == 1 会立刻误报。
-
-2026-09-17/18 一轮八张牌跑下来发现，文件数增量只能抓到「多起了一个会话」，**抓不到同一会话里的重复
-投递**——而重复投递正是那一轮多次发生的事（`agent prompt` 静默吞掉第一次是常态，回读看不到就容易
-重发）。所以改成数内容，两种都能抓：
+曾是「transcript 文件数增量必须为 1」，已推翻（抓不到同一会话里的重复投递），见 HISTORY #11。数内容，两种都能抓：
 
 ```bash
 scripts/count-delivered.sh <worktree 路径 | transcript.jsonl> '<prompt 里一句独特的话>'   # 输出次数
@@ -206,18 +169,13 @@ scripts/count-delivered.sh <worktree 路径 | transcript.jsonl> '<prompt 里一�
 计数代码只有这一份（`launch.sh` 也调它）。它数两种记录、排除两种，下面两段是为什么。
 
 **斜杠命令展开出的 `isMeta` 记录不数**：经 `agent prompt` 打进去的 `/某技能 <参数>`，除了一条普通的 `user`
-记录，技能正文会作为一条 `isMeta: true` 的 `user` 记录进对话，参数在里面再出现一次。**何时、怎么测的**：
-2026-10-21，在本机最近约 400 份 transcript 里找「命令行参数原样出现在某条 isMeta 记录里」的，找到 4 份。
-**推翻条件**：Claude Code 改了斜杠命令展开的记法。**被推翻的旧写法**：这里原先贴的计数代码没排除 `isMeta`，
-对斜杠命令起头的指令会数成 2，读成「重复送达」。
+记录，技能正文会作为一条 `isMeta: true` 的 `user` 记录进对话，参数在里面再出现一次。**推翻条件**：Claude Code
+改了斜杠命令展开的记法。曾是不排除 `isMeta` 的计数代码，已推翻（会数成 2），见 HISTORY #12。
 
 **对方正忙时发的指令不记成 `user`**：先记一条 `queue-operation`（`operation: enqueue`），被取出时再记一条
 `remove`，真正进入对话的是一条 `type: attachment`、`attachment.type: queued_command`（文本在 `attachment.prompt`），
 整个过程**没有 `user` 记录**。所以上面连 `queued_command` 一起数；`queue-operation` 那两条不要数，否则一次投递
-会数成两三次。对方空闲时发的才记成 `user`。
-**何时、怎么测的**：2026-10-21，Claude Code 2.1.306，同一个 worker 的 transcript：忙时排队的那条只有 `enqueue` /
-`remove` / `queued_command` 各一条、`user` 为 0；空闲时发的几条各有一条 `user`。原来只数 `user`，对排队的那条读出
-0，是假阴性。**推翻条件**：Claude Code 改了排队消息的记法。
+会数成两三次。对方空闲时发的才记成 `user`（实测见 HISTORY #12）。**推翻条件**：Claude Code 改了排队消息的记法。
 
 `<worktree-slug>` = worktree 绝对路径把 `/` 换成 `-`，**`.` 也变 `-`**（`/home/<user>/.herdr/...` →
 `-home-<user>--herdr-...`），少算一个横线会得到「0 个 transcript」的假读数。（这是 claude kind 的
@@ -228,20 +186,17 @@ transcript 位置；其它 kind 的对应物没有记录。）
 ### 送达不等于被处理
 
 回读证明的是「那一刻送到了」—— 一条已经躺在会话里、还没被消费的指令，遇上 `claude --resume` 会无声
-蒸发，而画面上看不出区别（2026-08-27 06:18 实际发生过，见 §6「被重启过」）。**改变边界或叫停一类的
+蒸发，而画面上看不出区别（见 §6「被重启过」）。**改变边界或叫停一类的
 指令，验收要落在行为上**（分支基点变了、那个文件不再被动了），不是落在画面上。
 
 ### 别往有人在打字的输入框里发
 
 `agent prompt` 是往对方输入框里打字再按 Enter。**输入框里已经有人打了一半的字，你的消息会接在后面、和它一起
-提交。** 2026-10-13 实际发生过：一条消息被接在用户在 grill pane 里没写完的回答后面一起发了出去。（`pane send-text`
-也是往输入框里打字，同样会接在后面——这一点是按机制推断的，没单独测。）
+提交**（发生过，见 HISTORY #13）。`pane send-text` 同样会接在后面（按机制推断，没单独测）。
 
 所以给可能有人在用的 pane 发消息前，先看输入框是不是空的：取 `pane read --source visible --format ansi` 里最后一行
 带 `❯` 的，**去掉暗色（`ESC[2m … ESC[0m`）片段**再看剩下的有没有字。暗色那段是 Claude Code 的灰字输入建议，不是
-谁打的字：2026-10-14 一个 worker 的输入框里显示「合并 PR 1007」，按纯文本读，coordinator 好几次让用户「按一下
-Enter」，用户指出那是建议、他根本没打过。**何时、怎么测的**：去掉暗色后，4 个显示着建议的 pane 都读成空。
-**还没见过的一侧**：真有人打了字时应当读成非空——没测过。**推翻条件**：Claude Code 改了建议的显示方式（不再
+谁打的字（误读过，见 HISTORY #13）。**还没见过的一侧**：真有人打了字时应当读成非空——没测过。**推翻条件**：Claude Code 改了建议的显示方式（不再
 用暗色），或真打的字也被读成空。
 
 `scripts/deliver-when-idle.sh "<消息>" <agent>...` 就是这么做的：等 agent 不在 working、输入框为空才发，每 15
@@ -249,15 +204,12 @@ Enter」，用户指出那是建议、他根本没打过。**何时、怎么测�
 
 ### 斜杠命令这样打是有效的
 
-2026-08-25 实测：经 `agent prompt` 打进输入框的 `/grill-with-docs` 会正常加载技能，即使它带
-`disable-model-invocation: true`（那条只挡模型自行加载，不挡人敲，而打进输入框等同人敲）。
+经 `agent prompt` 打进输入框的 `/grill-with-docs` 会正常加载技能，即使它带 `disable-model-invocation: true`
+（那条只挡模型自行加载，不挡人敲，而打进输入框等同人敲）。实测见 HISTORY #14。
 
 **内置命令也一样，包括给自己打。** 模型自己调不了 `/rename` 这类内置命令，但经 herdr 往一个 claude 的输入框里打
-（`pane send-text <pane> "/rename <名>"` 再 `send-keys Enter`），效果等于人敲，对自己的 pane 也行。**何时、怎么
-测的**：2026-10-21，Claude Code 2.1.306 + herdr 0.9.5。先在一个一次性 session 上测：空闲时发 `/rename`，立刻显示
-`Session renamed to: …`，peer 列表（`ListAgents`）马上变了；正在跑工具（`sleep 25`）时发，也是立刻生效，没有
-打断那一轮，也没有排到这一轮之后。再在一个 session 自己这一轮的工具调用里对自己的 pane 发，同样生效。
-**推翻条件**：发出去之后画面上没有 `Session renamed to`、peer 列表里名字不变；忙时发的进了排队、等这一轮结束
+（`pane send-text <pane> "/rename <名>"` 再 `send-keys Enter`），效果等于人敲，对自己的 pane 也行；忙时发也立刻
+生效，不打断、不排队（实测见 HISTORY #14）。**推翻条件**：发出去之后画面上没有 `Session renamed to`、peer 列表里名字不变；忙时发的进了排队、等这一轮结束
 才执行。受上面「别往有人在打字的输入框里发」约束。
 
 ### 指令里要引用技能时，先确认对方的 harness 找得到它
@@ -274,24 +226,16 @@ Enter」，用户指出那是建议、他根本没打过。**何时、怎么测�
 
 ### 陷阱 ④ 两种读法的真实分工
 
-**原文（2026-08-25/26，herdr 0.8.x）**：「`pane read --source visible` 读不到对话内容，会返回空白让你
-误判『指令没送达』。一律用 `--source recent-unwrapped`。」
+曾是「`visible` 读不到对话内容，一律用 `recent-unwrapped`」（herdr 0.8.x），已推翻，见 HISTORY #15。
 
-> **2026-09-28 在 herdr 0.9.1 上不再成立，原文保留。** 当时观测到 `visible` 读回空白；0.9.1 上逐个读了
-> claude / opencode / agy 各 kind 的活跃 pane，`visible` 都返回了当前一屏的内容。当初为什么成立没能
-> 复现，推测与 0.8.x 的读取实现有关（0.9.0 修过 #3444 一类读空问题），**未证实**。
->
-> 现在两种读法的真实分工：
-> - `visible` = **只有当前这一屏**，看不到滚上去的内容；不受光标位置影响。
-> - `recent-unwrapped --lines N` = 从**光标所在行**往上数 N 行，能读到滚上去的历史；但画面只占屏幕
->   顶部、光标停在下方时（agy 的信任对话框），小的 N 会读回全空，见陷阱 ①a。
->
-> 所以：**确认启动、看对话框用 `visible`；回读较长的对话历史、确认指令落在 banner 之后，用
-> `recent-unwrapped` 并给足行数。** 推翻条件：`visible` 在某个 kind 上再次读回空白，而同一时刻
-> `recent-unwrapped` 读得到——记下 `herdr --version` 与 kind。
->
-> 上面「`visible` = 当前这一屏」**少说了一半**：它是当前滚动位置那一屏，见下面 ④b。「确认启动用
-> `visible`」只在 pane 停在底部时成立。
+两种读法的真实分工：
+- `visible` = **当前滚动位置那一屏**，看不到滚上去的内容；不受光标位置影响（滚动见下面 ④b）。
+- `recent-unwrapped --lines N` = 从**光标所在行**往上数 N 行，能读到滚上去的历史；但画面只占屏幕
+  顶部、光标停在下方时（agy 的信任对话框），小的 N 会读回全空，见陷阱 ①a。
+
+所以：**确认启动、看对话框用 `visible`（只在 pane 停在底部时成立）；回读较长的对话历史、确认指令落在 banner
+之后，用 `recent-unwrapped` 并给足行数。** 推翻条件：`visible` 在某个 kind 上再次读回空白，而同一时刻
+`recent-unwrapped` 读得到——记下 `herdr --version` 与 kind。
 
 ### 陷阱 ④b `visible` 跟着 pane 的滚动位置走，滚上去就冻成旧画面
 
@@ -315,7 +259,7 @@ off=$(herdr pane get <p> | jq '.result.pane.scroll.offset_from_bottom')
   `offset_from_bottom` 为 0；或者改用 `recent --lines <viewport_rows>`（不受滚动影响，会多带进一两行上一屏）。
 - 不要替人把 pane 滚回底部：那会改掉人正在看的界面。
 
-实测于 herdr 0.9.5 + agy 1.4.2（2026-10-21；0.9.1 上同样成立），步骤见 [`HISTORY.md`](HISTORY.md) #1。
+实测于 herdr 0.9.5 + agy 1.4.2（0.9.1 上同样成立），见 HISTORY #1。
 **推翻条件**：pane 滚上去时 `visible` 返回底部内容，或 `offset_from_bottom` 为 0 时 `visible` 比 `recent` 旧。
 
 ### 陷阱 ③ `agent_status` 是刮终端画面得来的，会抖
@@ -332,13 +276,13 @@ herdr 对 agy 没有生命周期 hook，状态只靠屏幕 manifest。agy 遇到
 `The request contains invalid parameters`）会停住等人叫醒，而 remote manifest `2026.10.05.1` 里没有规则认这行，
 落到默认的 `idle`——不是 `blocked`。所以 agy 的 working→idle（`agent_status`、`agent wait`、
 `pane.agent_status_changed`、dispatch 的 `AGENT-STATUS`）每次都要读 `recent` 的底部，看输入框上方有没有那行报错。
-herdr 0.9.5 + manifest `2026.10.05.1` 下用 `agent explain --file` 测过（历史 #2）。
+herdr 0.9.5 + manifest `2026.10.05.1` 下用 `agent explain --file` 测过（HISTORY #2）。
 **推翻条件**：`herdr agent explain --file <报错屏> --agent agy` 给出 `blocked`，或真实报错屏读成 `working`。
 
-曾是「接口报错停住读作 working」「后台 shell 在跑就算 working」，已推翻，见历史 #2。
+曾是「接口报错停住读作 working」「后台 shell 在跑就算 working」，已推翻，见 HISTORY #2。
 
 **本地覆盖是整份替换，不是按规则合并。** `~/.config/herdr/agent-detection/agy.toml` 存在时，上游 manifest
-整个不生效：覆盖文件里只放一条规则，agy 的 working、信任框、权限框就全落成 `idle`（历史 #3）。
+整个不生效：覆盖文件里只放一条规则，agy 的 working、信任框、权限框就全落成 `idle`（HISTORY #3）。
 `herdr server agent-manifests` 对 agy 报 `local override shadows cached remote rules` 时，去比两份规则。
 **推翻条件**：同一组 `explain --file` 在只含一条规则的覆盖下，其余屏幕仍按上游规则判。
 
@@ -356,14 +300,14 @@ agent 退出后会**从列表里消失**，pane 变 `unknown`，死活可判。�
 给正在干活的 agent 插指令，它会等当前这轮**完整跑完**才处理。改派时必须接受「对方会先把手上这轮
 做完」。
 
-### 陷阱 ⑥ 四条「叫停」路径，实测只有一部分能用（2026-08-26，2026-09-17 补）
+### 陷阱 ⑥ 四条「叫停」路径，实测只有一部分能用（见 HISTORY #16）
 
 | 路径 | 实测结果 |
 |---|---|
 | `herdr agent prompt` | 排队，不打断（同陷阱 ②） |
 | `SendMessage`（Claude Code 跨 session 消息） | 会被接收方扣留等人工批准；`dialogExpiry` 默认 5 分钟，超时**静默丢弃并回拒绝** —— 发送方只看到「已扣留」，看不出是超时废弃 |
 | `herdr pane send-keys <pane_id> Escape` | 仍未实测 |
-| `herdr agent send-keys <agent> <键>` | **实测可用**（2026-09-17，替 agy 按权限提示的 `2`）。官方技能也给了 `agent send-keys <名> esc` 的写法；用它当急停**没单独测过** |
+| `herdr agent send-keys <agent> <键>` | **实测可用**（替 agy 按权限提示的 `2`）。官方技能也给了 `agent send-keys <名> esc` 的写法；用它当急停**没单独测过** |
 | `herdr agent <stop>` | **不存在这个子命令** |
 
 唯一实测可用的急停手段：`kill <pid>`。pid 从该 agent 自报的地方取——例如它写下的占住记录里的进程号
@@ -372,11 +316,10 @@ agent 退出后会**从列表里消失**，pane 变 `unknown`，死活可判。�
 
 ## 5 · agent 之间通信
 
-### 陷阱 ⑦ Claude Code：`crossSessionInbound` 未设置时，跨 session 消息按权限模式对等投递（2026-08-26 实测）
+### 陷阱 ⑦ Claude Code：`crossSessionInbound` 未设置时，跨 session 消息按权限模式对等投递
 
 主控 session 常是 `bypassPermissions`，herdr 起的 claude agent 是 `auto`（prompting 类）——每一对都
-跨类，双向消息全部扣留等人工批准。后果不是「消息慢」，是**agent 看起来像卡死**：那一轮有个 worker
-静默 31 分钟、零文件改动，被误判为进程冻结，实际是它在等一条消息的投递批准。修法：在
+跨类，双向消息全部扣留等人工批准。后果不是「消息慢」，是**agent 看起来像卡死**（误判过，见 HISTORY #16）。修法：在
 `~/.claude/settings.json` 顶层设 `"crossSessionInbound": "accept"`；对**已在跑的 session 立即生效，
 无需重启**。
 
@@ -389,16 +332,13 @@ agent 退出后会**从列表里消失**，pane 变 `unknown`，死活可判。�
 
 ### 判定「停摆」前四个信号必须全部为真
 
-不能只看 transcript 是否增长。transcript 冻结与「正在跑长命令」在这个指标下表现完全相同 —— 一个开 PR
-前要跑约 8 分钟全量测试的项目就会触发这个假信号（实测：一个 worker 的 transcript 冻结 5.5 分钟，进程
-核查显示它在正常跑测试脚本里的 `pytest`）。
+不能只看 transcript 是否增长。transcript 冻结与「正在跑长命令」（例如开 PR 前的全量测试）在这个指标下表现完全
+相同。
 
 **这个指标的另一侧一样会撞车：已经做完的 agent 也长这样。** transcript 停止是因为它交完活退场了，文件
 mtime 静止是因为它提交了（工作区变干净）；一份纯文档任务本来就没有子进程可看。「跑长命令」和「已完工」
 在这三个信号上完全重合，这正是陷阱 ③（闲着因为干完了 vs 闲着因为卡住，状态完全相同）在停摆判定里的
-再现——按字面实现这条会重新推导出同一种误报。实测：一次巡检把一个文档任务的 worker 判成 `STALLED`
-（transcript 135 行、文件 mtime 皆静止 10 分钟、无存活子进程），而当时的真实状态是已提交、已开 PR、
-正常收工。
+再现——按字面实现这条会重新推导出同一种误报。两种误报都发生过，见 HISTORY #17。
 
 四个信号必须**全部**为真才成立，任一为假都不是停摆：
 
@@ -412,14 +352,11 @@ mtime 静止是因为它提交了（工作区变干净）；一份纯文档任�
 
 ### 被 `claude --resume` 重启过：四个信号全正常，但事情没在推进
 
-2026-08-27 06:18，一批任务的 claude 进程被 `claude --resume <sid>` 重新拉起。同一个 session id 续写
-**同一个** transcript、提交都在、分支没变、占住记录原样躺着 —— **上面四个信号在重启前后全部读作健康，
-没有一个会翻转**，当时的技能里对 resume 一个字都没有。主控完全没察觉，是用户问了一句「貌似有一个
-worker 已经在工作很久了」才去跑 `ps` 发现的。
+`claude --resume <sid>` 重新拉起的进程续写**同一个** transcript、提交都在、分支没变、占住记录原样躺着 ——
+**上面四个信号在重启前后全部读作健康，没有一个会翻转**（发生过，见 HISTORY #18）。
 
-真正的代价不是进程中断（resume 恢复了上下文，活继续做完了），而是：**指令送达之后、被消费之前遇到
-重启会无声蒸发，发送方看不出任何区别。** 那一轮给它排了四条指令，事后只能从行为反推出 rebase 那条
-被消费了（分支基点变了）；若有一条没被消费，永远不会有人知道。
+真正的代价不是进程中断（resume 恢复了上下文），而是：**指令送达之后、被消费之前遇到重启会无声蒸发，发送方看不出
+任何区别**，只能从行为反推哪条被消费了。
 
 **检测：比 pid。** agent 自报的进程号（例如它的占住记录里的 `pid:`；Claude Code 的消息 socket 路径
 `/run/user/<uid>/cc-socks/<pid>.sock` 里就是它），对上那个 worktree 里实际活着的进程：
@@ -430,8 +367,7 @@ for p in $(pgrep -x claude); do printf '%s\t%s\n' "$p" "$(readlink /proc/$p/cwd)
 
 两者不等 ⇒ 被重启过（resume 是新进程、新 pid，本次 boot 内 pid 不会重用）。
 
-**不要改用启动时间比。** `ps -o lstart` 在 WSL2 上不可信：实测一个进程的 lstart 报 `Aug 28 03:35`，而
-它 socket 文件的 mtime 与它自己写下的占住时间戳都指向 `Aug 27 15:28` —— 差 12 小时。时钟跳变会让启动
+**不要改用启动时间比。** `ps -o lstart` 在 WSL2 上不可信（实测差 12 小时，见 HISTORY #18）：时钟跳变会让启动
 时间凭空「变化」，pid 不会。
 
 **连带一条回收保护**：socket 路径按旧 pid 命名，重启后指向一个已不存在的进程，所以按 socket 判活的
@@ -464,43 +400,33 @@ for p in $(pgrep -x agy); do printf '%s\t%s\n' "$p" "$(readlink /proc/$p/cwd)"; 
 为什么正常收工不直接 kill：`/exit` 让 Claude Code 自己退出、收好 transcript，退出之后它从 `herdr agent list`
 消失，这本身就是「进程停了」的判据，不用去找 pid。为什么急停不用 `/exit`：它是一条普通 prompt，对方正忙时会
 **排队**到这一轮跑完（陷阱 ②），打断不了任何东西。
-**`/exit` 这条路径怎么测的**：2026-10-21（Claude Code 2.1.306 + herdr 0.9.5）在一个一次性仓库的新 worktree 上跑了一遍 `launch.sh` →
-`deliver-when-idle.sh` → `retire.sh exit` → `retire.sh remove`：空闲的 agent 收到 `/exit` 后约 3 秒离开列表，
-worktree 删掉，workspace 关掉，列表里不再有它。只测了空闲时这一次。**推翻条件**：`/exit` 之后 agent 留在列表里
+`/exit` 这条路径只在空闲时测过一次（见 HISTORY #19）。**推翻条件**：`/exit` 之后 agent 留在列表里
 （`retire.sh exit` 会报 ⚠）；或 herdr 改成 agent 退出后仍保留在列表里。
 
 `retire.sh remove` 按 `herdr workspace list` 里每个 workspace 的 `worktree.checkout_path` 找挂着这个 worktree 的那个
 （workspace 的标签是给人看的，可能被改过；`checkout_path` 是 herdr 自己记的路径），删 worktree，关 workspace，
 最后再看一遍列表。herdr 0.9.5 有 `herdr worktree remove`，它会不会连带关 workspace **没测过**，所以这里不用它。
 
-**不要假设哪一步会替你做另一步。** 2026-09-17/18 那一轮我清掉四个 worker 的进程与 worktree 之后，前
-三个的 workspace 从 `herdr workspace list` 里消失了，我据此推断「`worktree remove` 会连带关 workspace」
-并当场写成经验——**用户指出那三个是他们手动关的**。`worktree remove` 到底会不会连带关，至今没有观测
-过。第 4 个就留成了空壳，要显式 `workspace close` 才没了。
+**不要假设哪一步会替你做另一步。** 曾是「`worktree remove` 会连带关 workspace」，已推翻（那几个是用户手动关的），
+见 HISTORY #20。`worktree remove` 到底会不会连带关，至今没有观测过。
 
 **完成判据**：收工后跑一次 `herdr workspace list`，还看得见那个标签就是没关干净。
 
 ## 8 · 各 harness 从哪里发现技能
 
-| harness | 用户级 | 工作区级 | 怎么测的 |
-|---|---|---|---|
-| Claude Code | **发现** `~/.claude/skills/`。测的那台机器上 `~/.claude/skills` 整个是指向 `~/.agents/skills` 的软链；Claude Code 自己扫不扫 `~/.agents/skills/` **没单独测** | `.claude/skills/`；其中软链到别处的技能目录也会被发现 | 2026-09-28：session 的技能列表里出现用户级技能，也出现工作区里以软链存在的技能 |
-| OpenCode 1.18.32 | **发现** `~/.agents/skills/` 与 `~/.claude/skills/`，两个都扫 | 未测出结论 | 2026-09-28：在一个空目录里跑 `opencode debug skill`，列出的 `location` 全在 `~/.agents/skills/…` 下，日志里对 `~/.claude/skills/…` 报 `duplicate skill name`（说明两个都扫了） |
-| agy 1.2.12 | **发现 `~/.gemini/config/skills/<名>/SKILL.md`**（软链也行）；**不扫 `~/.agents/skills/`** | `.agents/skills/` | 2026-09-28，见下 |
+| harness | 用户级 | 工作区级 |
+|---|---|---|
+| Claude Code | **发现** `~/.claude/skills/`。测的那台机器上 `~/.claude/skills` 整个是指向 `~/.agents/skills` 的软链；Claude Code 自己扫不扫 `~/.agents/skills/` **没单独测** | `.claude/skills/`；其中软链到别处的技能目录也会被发现 |
+| OpenCode 1.18.32 | **发现** `~/.agents/skills/` 与 `~/.claude/skills/`，两个都扫 | 未测出结论 |
+| agy 1.2.12 | **发现 `~/.gemini/config/skills/<名>/SKILL.md`**（软链也行）；**不扫 `~/.agents/skills/`** | `.agents/skills/` |
+
+怎么测的见 HISTORY #21。
 
 **所以用户级安装要链两处**：`~/.agents/skills/<名>`（Claude Code 经 `~/.claude/skills`、OpenCode）和
 `~/.gemini/config/skills/<名>`（agy）。`scripts/check-env.sh` 会列出五份技能在这两处各在不在。
 
-**agy 这一行怎么测的**（2026-09-28，agy 1.2.12）：在 `~/.gemini/config/skills/<名>/SKILL.md` 放一个探针技能，
-在一个空目录里让 agy 列技能（明确要求不调用工具），列表里出现了它；把它换成**指向别处的软链**再测一次，照样
-出现。对照：同一个探针放在 `~/.agents/skills/` 时不出现——用触发词问它，它是靠 `find ~` 搜到文件再读出来的，
-不是加载。
-
-**被推翻的旧说法，留在这里别删**：同一天早些时候这一行写的是「agy **不发现**用户级技能」，推论是「派 agy 时，
-指令里写明要它读的技能的绝对路径」。当时只测了 `~/.agents/skills/`——那一半是对的——就把「这个目录不扫」推广成
-了「用户级都不扫」，没去查 agy 自己的全局技能目录。绝对路径那条变通因此作废：它会把一个装对位置就能消除的问题，
-固化成每条指令都要带的额外负担。下一个看到「agy 找不到技能」的人，先查它是不是装进了 `~/.gemini/config/skills/`，
-别把绝对路径加回来。
+曾是「agy 不发现用户级技能，派 agy 时指令里写技能的绝对路径」，已推翻，见 HISTORY #21。下一个看到「agy 找不到
+技能」的人，先查它是不是装进了 `~/.gemini/config/skills/`，别把绝对路径加回来。
 
 **什么观测会推翻本表**：
 - agy 改了全局技能目录，或开始扫 `~/.agents/skills/` ⇒ 改 agy 那行和安装步骤。复核方法：安装后在空目录里让

@@ -8,12 +8,10 @@
 #
 # 数什么、不数什么（每条都是实测）：
 # · `type: user` 且不是 `isMeta` 的记录 —— 空闲时发的指令记成这样。
-# · `type: attachment`、`attachment.type: queued_command` —— 忙时发的指令排队，进入对话时记成这样，没有 user 记录
-#   （2026-10-21，Claude Code 2.1.306）。同时记下的 `queue-operation` enqueue / remove 两条不数，否则一次数成三次。
+# · `type: attachment`、`attachment.type: queued_command` —— 忙时发的指令排队，进入对话时记成这样，没有 user 记录。
+#   同时记下的 `queue-operation` enqueue / remove 两条不数，否则一次数成三次。
 # · **不数 `isMeta` 的 user 记录**：斜杠命令（`/grill-with-docs <参数>`）展开出的技能正文是一条 isMeta 的 user
-#   记录，参数会在里面再出现一次。2026-10-21 在本机近 400 份 transcript 里找到 4 份是这样（命令行里的参数原样
-#   出现在随后的 isMeta 记录里）；不排除就把一次送达数成两次。
-#   SKILL.md §2 原先贴的那段计数代码没排除 isMeta，dispatch 的 launch.sh 排除了；两份并存，现只留这一份。
+#   记录，参数会在里面再出现一次；不排除就把一次送达数成两次。实测与旧版两份计数代码见 HISTORY.md #12。
 # 什么会推翻：Claude Code 改了 transcript 的记法（排队消息、斜杠命令展开的记录类型）。
 
 set -u

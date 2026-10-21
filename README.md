@@ -13,10 +13,13 @@ Every rule records how it was measured and which observation would overturn it.
 | [`todo-recorder`](todo-recorder/SKILL.md) | Record-only: the user states requirements, you write them to `TODO.md` at the repo root (or to an issue when explicitly asked). Never implements | None | Yes |
 | [`todo-executor`](todo-executor/SKILL.md) | Execute: scan `TODO.md`, pick items, implement, tick them off, commit, loop until none are left | None | Yes |
 
-`dispatch` knows nothing about GitHub. It states the questions it needs a "workflow" to answer (what work exists,
+`dispatch`'s rules know nothing about GitHub. They state the questions a "workflow" must answer (what work exists,
 how to claim it, how to hand it in, which branch a task maps to). With no workflow configured it falls back to
 a list the user gives in conversation. To manage work on GitHub, use `dispatch` + `github-backlog` together;
 [`for-dispatch.md`](github-backlog/for-dispatch.md) in the latter maps one onto the other.
+Two of `dispatch`'s scripts do touch GitHub, and say so: `closeout.sh` calls `github-backlog`'s `close-merged.sh`
+(so it needs `gh` and the `github-backlog` skill installed next to it), and `scan-workers.sh` watches open PRs with
+`gh` (turn that off with `WATCH_PRS=0`).
 
 `todo-recorder` / `todo-executor` are a much lighter `TODO.md`-based flow than `dispatch` + `github-backlog`:
 no issue claiming, no collision grouping, just "write it down" and "do them one by one". They can be combined with
@@ -30,10 +33,18 @@ no issue claiming, no collision grouping, just "write it down" and "do them one 
 
 | Script | Belongs to | What it does | Writes anything? |
 |---|---|---|---|
-| `herdr-agents/scripts/check-env.sh` | herdr-agents | Compares local herdr / claude / agy / opencode versions with the versions the skills were measured against; reports whether the skills are installed under `~/.agents/skills/` and `~/.gemini/config/skills/` | No |
+| `herdr-agents/scripts/check-env.sh` | herdr-agents | Compares local herdr / claude / agy / opencode versions with the versions the skills were measured against; reports whether the five skills are installed under `~/.agents/skills/` and `~/.gemini/config/skills/` | No |
+| `herdr-agents/scripts/launch.sh` | herdr-agents | Start a claude agent in a new worktree: wait until ready (answers the trust dialog), send one instruction, count deliveries (`DRY_RUN=1` prints only) | Creates a worktree, workspace and agent |
+| `herdr-agents/scripts/count-delivered.sh` | herdr-agents | Count how many times an instruction reached a claude agent's transcript | No |
+| `herdr-agents/scripts/deliver-when-idle.sh` | herdr-agents | Send a message once the agent is idle and its input box is empty | Sends the message |
+| `herdr-agents/scripts/retire.sh` | herdr-agents | Wrap up: `exit` (send `/exit`, wait until the agent is gone), `remove` (remove the worktree, close its workspace) | Removes the worktree, closes the workspace |
 | `github-backlog/scripts/bootstrap.sh` | github-backlog | Checks `gh` and the repo; lists missing labels and creates them only after confirmation (`--check` lists only) | Creates labels after confirmation |
 | `github-backlog/scripts/claim-issue.sh` | github-backlog | Claim an issue, read-only check (`--check`), `--self-test` | Writes the issue when claiming |
-| `dispatch/scripts/scan-collisions.sh` | dispatch | Scans for migration / ADR number collisions across branches (`MIGRATION_DIR` and `ADR_DIR` are required) | No |
+| `github-backlog/scripts/close-merged.sh` | github-backlog | After merge: verify the PR landed, move its Issue `In review` → `Done` (`--check` verifies only) | Changes Issue labels |
+| `dispatch/scripts/scan-collisions.sh` | dispatch | Scans for migration / ADR number collisions across branches (`MIGRATION_DIR` and/or `ADR_DIR` required; `--prs` uses `gh`) | No |
+| `dispatch/scripts/test-scan-collisions.sh` | dispatch | Builds each collision case in a temporary repo and checks `scan-collisions.sh`'s output and exit code | Only in a temp dir |
+| `dispatch/scripts/scan-workers.sh` | dispatch | Patrol event stream for the Monitor tool: agents, PRs (`gh`), main moving, collisions, heartbeat | No (only `git fetch`) |
+| `dispatch/scripts/closeout.sh` | dispatch | After a PR merges, runs the cleanup in order: `close-merged.sh` → `retire.sh exit` → the project's `DROP_DB_CMD` → `retire.sh remove` → delete the local branch | Yes — labels, worktree, workspace, branch, and whatever `DROP_DB_CMD` does |
 
 `/dispatch bootstrap` runs `check-env.sh`, then the bootstrap of the workflow you configured (for GitHub, `bootstrap.sh`).
 

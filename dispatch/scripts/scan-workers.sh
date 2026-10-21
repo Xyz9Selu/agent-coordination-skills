@@ -2,13 +2,14 @@
 #
 # coordinator 巡检的事件流：每 INTERVAL 秒看一遍盘面，**每行输出 = 一个事件**，没变化就不出声（心跳除外）。
 # 只读：不写 gh、不写 git，唯一的写是 `git fetch`。
+# 依赖：herdr、git；盯 PR（PR-* 事件、撞号扫描的 --prs）要 gh 且仓库在 GitHub 上 —— 不是的话设 WATCH_PRS=0。
 #
 # ── 怎么挂 ────────────────────────────────────────────────────────────────────────────────────────
 # 用 Claude Code 的 Monitor 工具（每行 stdout 变成一条通知）：
 #
 #   Monitor(
 #     description: "dispatch 巡检 <仓库名>",
-#     command: "REPO=/path/to/repo MIGRATION_DIR=backend/alembic/versions ADR_DIR=docs/adr \
+#     command: "REPO=/path/to/repo MIGRATION_DIR=<迁移目录> ADR_DIR=<ADR 目录> \
 #               ~/.agents/skills/dispatch/scripts/scan-workers.sh",
 #     timeout_ms: 1800000)           # 上限 30 分钟；到期收到通知就原样再挂一次
 #
@@ -21,10 +22,11 @@
 #   INTERVAL=90    轮询间隔（秒）
 #   HEARTBEAT=300  心跳间隔（秒）；0 = 不出心跳
 #   DEFAULT_REMOTE=origin  DEFAULT_BRANCH=main
+#   WATCH_PRS=1    0 = 不调 gh：不出 PR-* 事件，撞号只扫 worker 的 worktree（开头说一次）
 #
 # ── 事件，以及 coordinator 该怎么反应 ────────────────────────────────────────────────────────────
 #   SCAN-READY     开始盯了：盯着哪些 agent、几个打开的 PR、main 在哪。核对名单是不是你以为的那些。
-#   HEARTBEAT      定时轻看一眼（2026-10-21 John 定的节奏：每 5 分钟轻看，事件来了再全查）。行里带当前状态
+#   HEARTBEAT      定时轻看一眼（默认每 5 分钟轻看，事件来了再全查；2026-10-21 用户定的节奏）。行里带当前状态
 #                  一览；没有别的事件就不必做什么，有异常（某个 working 很久不动之类）再去读那个 pane。
 #   AGENT-NEW      herdr 里出现了一个新的有名字的 agent。是你起的就核它送达了没有；不是你起的，弄清是谁的。
 #   AGENT-GONE     agent 从 `herdr agent list` 里消失（进程退出）。收尾过的正常；没收尾的去看 worktree、分支、PR。
@@ -43,14 +45,14 @@
 #                  第一次出现时报一行；PROBE-OK 表示它恢复了。没恢复之前，这一项的「没事件」不是「没变化」。
 #
 # ── 为什么这样 ───────────────────────────────────────────────────────────────────────────────────
-# 底子是前任 coordinator 2026-10 用了三周的 ~/.cache/smops-runs/coordinator/scan-workers.sh（自动盯所有有名字的
+# 底子是一个 coordinator 2026-10 在会话临时目录里用了三周的 scan-workers.sh（自动盯所有有名字的
 # agent、AGENT-NEW/GONE、状态变化附画面、权限框检测、全部打开的 PR 逐个比、探测失败报成事件）。在它上面改的：
 # · 状态防抖：herdr 的 agent_status 是刮屏得来的、会抖（herdr-agents §3 陷阱 ③），旧版 10-14 至 10-21 一周报了
 #   三千多条 AGENT-STATUS。新状态要连续两轮一致才报；权限框是要人动手的，不防抖。
 # · 心跳：Monitor 没事件就不会叫醒 coordinator，「没事件」和「脚本挂了」分不出来；心跳把两者分开，也给轻看定了节奏。
 # · 撞号：旧版扫本机所有 worktree，别的会话留下的 `worktree-agent-*` 刷满 COLLISION-SCAN，只好在外面套 grep -v；
 #   而且一次 34 秒。现在只把 herdr agent 所在的、属于 REPO 的 worktree 交给新的 scan-collisions.sh（≈1 秒）。
-# · 仓库路径、目录都从环境变量来，不再写死 smart-manu-ops；main 前进单独成事件。
+# · 仓库路径、目录都从环境变量来，不再写死某个仓库；main 前进单独成事件。
 # 文件放在技能仓库里（不放会话临时目录）：2026-10-05 一次重启清掉了 /tmp，带走了第一份。
 
 set -u
@@ -60,6 +62,7 @@ INTERVAL=${INTERVAL:-90}
 HEARTBEAT=${HEARTBEAT:-300}
 DEFAULT_REMOTE=${DEFAULT_REMOTE:-origin}
 DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
+WATCH_PRS=${WATCH_PRS:-1}
 BASE="$DEFAULT_REMOTE/$DEFAULT_BRANCH"
 SCAN_COLLISIONS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scan-collisions.sh"
 export MIGRATION_DIR="${MIGRATION_DIR:-}" ADR_DIR="${ADR_DIR:-}"
@@ -86,6 +89,7 @@ screen_tail() {  # 画面最后三行有内容的，去掉 TUI 的装饰行
 }
 
 [ -z "$MIGRATION_DIR$ADR_DIR" ] && emit "ℹ 没设 MIGRATION_DIR / ADR_DIR：不扫撞号"
+[ "$WATCH_PRS" = 1 ] || emit "ℹ WATCH_PRS=0：不盯 PR，撞号只扫 worker 的 worktree"
 
 while true; do
   # ---------- herdr agents ----------
@@ -153,7 +157,8 @@ for a in json.load(sys.stdin)["result"]["agents"]:
   fi
 
   # ---------- 打开的 PR ----------
-  if prs=$(cd "$REPO" && gh pr list --state open --limit 100 --json number,isDraft,title \
+  if [ "$WATCH_PRS" != 1 ]; then :
+  elif prs=$(cd "$REPO" && gh pr list --state open --limit 100 --json number,isDraft,title \
         --jq '.[] | "\(.number)\t\(if .isDraft then "draft" else "ready" end)\t\(.title[:70])"' 2>&1); then
     probe_ok gh
     sort <<<"$prs" | grep . > "$STATE/prs.new"
@@ -177,7 +182,9 @@ for a in json.load(sys.stdin)["result"]["agents"]:
 
   # ---------- 撞号 ----------
   if [ -n "$MIGRATION_DIR$ADR_DIR" ]; then
-    out=$(cd "$REPO" && "$SCAN_COLLISIONS" --no-fetch --prs "${worktrees[@]}" 2>&1); rc=$?
+    src=("${worktrees[@]}"); [ "$WATCH_PRS" = 1 ] && src+=(--prs)
+    if [ ${#src[@]} = 0 ]; then out=""; rc=0   # 没有在飞的 worktree、也不看 PR：没东西可扫（不带参数调它会默认 --prs）
+    else out=$(cd "$REPO" && "$SCAN_COLLISIONS" --no-fetch "${src[@]}" 2>&1); rc=$?; fi
     if [ $rc = 9 ] || { [ $rc != 0 ] && [ $rc != 1 ]; }; then
       probe_fail collisions "scan-collisions.sh rc=$rc: $(tail -2 <<<"$out" | tr '\n' ' ' | cut -c1-200)"
     else

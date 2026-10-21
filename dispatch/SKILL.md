@@ -24,8 +24,10 @@ description: Use when running as the coordinator for parallel worker agents — 
 - **`herdr-agents` 技能——强依赖，先读它。** 起 agent、确认就绪、送达确认、回读、打断、agent 之间
   传话、判断死活/卡住/干完/被重启、收工，全在那里。本技能里每次说「按 herdr-agents §N」，就是要你照
   那一节的步骤和完成判据做，不是参考。它又依赖官方 `herdr` 技能。
-- **工作流——可选，由调用方决定。** 本技能不认识任何具体的任务系统。要用哪个管活，就同时调用那个
-  工作流的技能。本技能只规定它要回答的问题，见下节。
+- **工作流——可选，由调用方决定。** 本技能的正文不认识任何具体的任务系统。要用哪个管活，就同时调用那个
+  工作流的技能。本技能只规定它要回答的问题，见下节。**脚本例外，如实说**：`scripts/closeout.sh` 第一步调
+  `github-backlog` 的 `close-merged.sh`（所以要 `gh`），`scripts/scan-workers.sh` 盯 PR 那部分直接用 `gh`
+  （`WATCH_PRS=0` 关掉）。换别的工作流，这两处要换成那个工作流提供的命令。
 - **项目自己的规矩不进本技能。** 测试命令、起服务的参数、数据库隔离这类要求，写在项目说明文件
   （`CLAUDE.md` / `AGENTS.md` 等）里；派活时把其中的测试与环境要求带进给 worker 的指令（见 §4）。
 
@@ -158,6 +160,9 @@ herdr pane send-text "$HERDR_PANE_ID" "/rename coordinator-<仓库目录名>"
 herdr pane send-keys "$HERDR_PANE_ID" Enter
 ```
 
+（`/rename` 是内置命令，模型自己调不了，只能经 herdr 往自己的输入框里打；这样打有效、忙时也立刻生效，是
+`herdr-agents` §2「斜杠命令这样打是有效的」的实测。）
+
 然后用 harness 的 peer 列表核一下（Claude Code 是 `ListAgents`），首行要读到 `This session is
 coordinator-<仓库目录名>`。没读到就是没改成，在报告里说一句，不要当已改。
 
@@ -167,16 +172,10 @@ coordinator-<仓库目录名>`。没读到就是没改成，在报告里说一�
 因为它也是别的 session 用 `SendMessage` 联系你时用的地址；加上仓库名，是为了几个仓库各跑一个
 coordinator 时能分开。
 
-为什么不直接调用 `/rename`：它是内置命令，模型没法自己调，只能经 herdr 往自己的输入框里打，效果等于
-人敲。**何时、怎么测出来的**：2026-10-21，Claude Code 2.1.306 + herdr 0.9.5。先在一个一次性 session 上测：
-空闲时发 `/rename`，立刻显示 `Session renamed to: …`，peer 列表马上变了；正在跑工具（`sleep 25`）时发，
-也是立刻生效，没有打断那一轮。再在 coordinator 自己这一轮的工具调用里对自己的 pane 发，同样生效，
-`ListAgents` 首行变成了新名字。
-**已知风险**：用户如果正好在 coordinator 的输入框里打了一半字，`send-text` 会接在后面一起提交
-（`herdr-agents` 的已知行为）。所以要在开工第一步做，那时用户刚敲完 `/dispatch`，输入框是空的。
-**什么观测会推翻本节**：发出去之后画面上没有 `Session renamed to`，或者 peer 列表里名字不变；session
-正忙时发，命令进了排队、等这一轮结束才执行；Claude Code 提供了模型能直接调用的改名方式（那时改用它，
-不再经 herdr 往输入框里打）。
+**已知风险**：用户如果正好在 coordinator 的输入框里打了一半字，打进去的字会接在后面一起提交（`herdr-agents`
+§2「别往有人在打字的输入框里发」）。所以要在开工第一步做，那时用户刚敲完 `/dispatch`，输入框是空的。
+**什么观测会推翻本节**：`herdr-agents` §2 那条实测被推翻（改名不生效或进了排队）；Claude Code 提供了模型能直接
+调用的改名方式（那时改用它，不再经 herdr 往输入框里打）。
 
 **起 worker / grill agent 时，三个层次的名字要一致且一眼可辨：**
 
@@ -186,6 +185,10 @@ coordinator 时能分开。
 | workspace 标签 | `worktree create --label` | `WORKER #<N> · <短名>` | `GRILL #<N> · <短名>` |
 | tab 标签 | `tab rename <tab_id>` | 同 workspace 标签 | 同 workspace 标签 |
 | git 分支名 | `worktree create --branch` | `issue/<N>-<短名>` | `issue/<N>-<短名>`（**同一条**，转实施不换、不改名；见 `grill.md`「grill 完在原分支继续做」） |
+
+**分支命名以这张表为准**，本技能和工作流的技能里别处的写法都只是引用它。占住记录里写的分支名要和实际分支一致、
+开了交付物之后不改名——这条归工作流（Q4；GitHub 上见 `github-backlog` 的「The branch in the claim is the branch
+you work on」）。
 
 `<N>` 是这件活在工作流里的编号（没配工作流就用你给清单项编的号）。`<短名>` 用两三个连字符词概括那件事
 （`fx-rate-gate`、`leave-quota`），不要用任务标题原文。一批多个任务时用领头号加数量：
@@ -264,7 +267,8 @@ socket）。你在 worker 启动前拿不到这些值。你只决定**谁该做�
 用户没点名的东西当成授意范围推了出去」的事故——那时要把授意的范围写得更窄。
 
 **worker 资源归你调度，谁创建谁清理。** 起几个 worker、哪件活排进哪个 worker 的队列、什么时候收，都由你定，不用问
-用户。自己起的 worker、worktree、数据库、分支、workspace、tab，交付物合并后自己收干净（`scripts/closeout.sh`）；
+用户。自己起的 worker、worktree、数据库、分支、workspace、tab，交付物合并后自己收干净（`scripts/closeout.sh`；
+数据库那一步要项目给 `DROP_DB_CMD`，见脚本文件头）；
 收不掉、弄坏了，先报告，用户来兜底。上表「删别人的 worktree 或分支」的禁令不变：不是你起的，一律不动。**做哪些活**
 仍由用户挑（§3 报牌）——放手的是「怎么用 worker 把选好的活做完」，不是「做哪些活」。
 来历：2026-10-21 用户：「关于 Worker 资源的调度我不插手。原则上谁创建谁清理。出了异常可以我来擦屁股。」在这之前，
@@ -414,24 +418,25 @@ worker rebase 后自查出一处因外部消耗未跟随重算导致的假双扣
 
 #### 发牌序列
 
-claude kind 的 ①–③ 已经串成 `scripts/launch.sh`（`REPO=<仓库> [MODEL=…] launch.sh <分支> <标签> <agent 名> <指令文件>
-<独特串>`，最后一行给出 transcript 里数到的送达次数，不是 1 就按 ③ 处理）；④ 仍要你自己盯。下面是它做的每一步。
+claude kind 的 ①–③ 是 `herdr-agents` 的 `scripts/launch.sh`（`REPO=<仓库> [MODEL=…] launch.sh <分支> <标签> <agent 名>
+<指令文件> <独特串>`，最后一行给出 transcript 里数到的送达次数，不是 1 就按 ③ 处理）；④ 仍要你自己盯。下面是
+coordinator 在每一步要定的东西，怎么做到的在 `herdr-agents` §1–§2。
 
 ```bash
 # ① 建隔离工作区（连带建好 workspace + tab + 已 cd 的 pane）
 herdr worktree create --cwd <repo根> --branch <分支名> --base origin/main \
   --label "WORKER #<N> · <短名>"                      # 命名见「命名与标记」
 #    → 从返回 JSON 取 result.root_pane.pane_id 与 result.tab.tab_id
-#    --base 一律 origin/main（先 git fetch）。原文写的是 --base main：本地 main 曾落后 origin 298 个提交，
-#    主 checkout 也常停在别的分支上；2026-10-12 John 定「以后从 origin/main 拉，合并到 main」。
-#    dispatch/scripts/launch.sh 已按此实现。
+#    --base 一律用 fetch 之后的远端默认分支（origin/main），不用本地 main。原文写的是 --base main：
+#    一次观测里本地 main 落后远端数百个提交，主 checkout 也常停在别的分支上，从本地 main 拉的分支一开始就过时。
+#    launch.sh 的 BASE 默认就是 origin/main，并先 fetch。
 
 # ①a 给 tab 也贴同一个标签，用户扫一眼就知道这是谁
 herdr tab rename <tab_id> "WORKER #<N> · <短名>"
 ```
 
-② **起 agent 并确认就绪** —— 按 `herdr-agents` §1。agent 名 `worker-<N>-<短名>`，模型按上面的档位。
-完成判据是那一节的：轮询因匹配到 banner 而结束。
+② **起 agent 并确认就绪** —— 按 `herdr-agents` §1（claude kind 的特征串和信任框见那里）。agent 名
+`worker-<N>-<短名>`，模型按上面的档位。完成判据是那一节的：轮询因匹配到 banner 而结束。
 
 ③ **发任务，确认送达且只送达一次** —— 按 `herdr-agents` §2：`--wait` 的 `OK` 什么都不证明；回读看到
 指令落在 banner 之后；transcript 里那句独特的话恰好 1 次。
@@ -484,7 +489,7 @@ worker 起在**它自己的 herdr workspace** 里。用户待在原来那个 wor
 #224 → workspace w9「WORKER #224 · fx-rate-gate」· pane w9:p1
        herdr agent 名 worker-224-fx-rate-gate
        session 名 fix-224-fx-missing-rate-gate-4c
-       分支 fix/224-fx-missing-rate-gate
+       分支 issue/224-fx-rate-gate
 ```
 
 **两个名字都要报** —— herdr 名是你起的，worker 的 session 名是 harness 自己生成的，我们不改它（见「命名与标记」）。
@@ -509,9 +514,10 @@ worker 起在**它自己的 herdr workspace** 里。用户待在原来那个 wor
 - **做完的判定以地面事实为准**：「已关闭/已完成」不等于做完；容器是「做完了却没人关」。
 - **grill agent 长时间 idle 是正常的**，看结论有没有写回（Q3），不看状态。
 - **未完成交付物的年龄**、**核查标记**、**合并计划**。
-- **合并后收尾**：`REPO=<仓库> scripts/closeout.sh <PR> <Issue> <agent 名>`——核落地 → Issue 改 Done → worker `/exit`
-  → 删库 → 删 worktree → 关 workspace → 删本地分支。给正忙的 worker 带话用 `scripts/deliver-when-idle.sh`（等它停下、
-  输入框空了才发）。
+- **合并后收尾**：`REPO=<仓库> [DROP_DB_CMD=…] scripts/closeout.sh <PR> <Issue> <agent 名>`——核落地、Issue 改 Done
+  （`github-backlog`）→ worker `/exit`（`herdr-agents` §7）→ 删库（项目的钩子）→ 删 worktree、关 workspace
+  （`herdr-agents` §7）→ 删本地分支。本技能只定这个顺序。给正忙的 worker 带话用 `herdr-agents` 的
+  `scripts/deliver-when-idle.sh`（等它停下、输入框空了才发）。
 - 发现冲突 → 改派或叫停（叫停按 `herdr-agents` §4）。worker 空了 → **回步骤 1 重新勘察分组，然后回步骤 3
   报牌等用户挑** —— 不要自动补牌。
 

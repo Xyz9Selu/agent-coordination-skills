@@ -18,6 +18,7 @@ herdr worktree create --cwd <repo根> --branch issue/<N>-<短名> --base origin/
 herdr tab rename <tab_id> "GRILL #<N> · <短名>"
 herdr agent start grill-<N>-<短名> --kind claude --pane <root_pane> --timeout 60000 -- --model opus
 # 【必须】确认就绪再发 —— 按 herdr-agents §1（轮询 visible 到 banner，按掉信任对话框）
+# 这三步加送达计数也可以一条命令做：herdr-agents 的 scripts/launch.sh（MODEL=opus，指令文件里放这条斜杠命令）
 herdr agent prompt grill-<N>-<短名> '/grill-with-docs <这批活的号 + 你卡在哪个判断上>' \
   --wait --until working --timeout 12000
 # 报 agent_prompt_stalled ⇒ 重发；返回 OK ⇒ 什么都不能证明 —— 按 herdr-agents §2 回读 + 内容计数
@@ -32,8 +33,13 @@ herdr agent prompt grill-<N>-<短名> '/grill-with-docs <这批活的号 + 你�
 
 ## 八条硬约束，全部要写进给它的指令里
 
-1. **同一时刻只起一个 grill agent。** 用户是一个人，两个 grill agent 同时向他们发问，会被撕成两半 —— 这跟
-   「不微操」是同一个道理。
+1. **同一时刻最多两个 grill agent。** 两个同时在谈时，给每个的指令里写明「另一个 grill 在谈 X，用户的回复可能
+   隔一阵才来，不要催，不引用另一边还没定的结论」。超过两个先问用户。
+   **为什么从「只许一个」改成「最多两个」**：原文是「同一时刻只起一个 grill agent。用户是一个人，两个 grill agent
+   同时向他们发问，会被撕成两半 —— 这跟『不微操』是同一个道理」。2026-10-05 一个 grill 正在谈，coordinator 按原文
+   打算等它谈完再起第二个，用户否了：「直接安排吧。同时 grill 2 个是可以的。」用户在两个窗口之间切换得过来，
+   「撕成两半」是替用户做的推测，没有观测支撑。上限定在两个，是因为用户只说过两个。
+   **推翻条件**：用户说两个同时谈太乱，或改成别的上限。
 2. **给 grill agent 的那批活应当彼此相关。** 相关议题会互相澄清，一次谈完比分三次谈便宜。判据和分组一样：
    共享模块或共享概念。
 3. **它必须把结论写回工作流的追加记录**（Q3），而且按工作流的规矩办（例如不重写最初的描述）。这是闭环的
@@ -118,9 +124,10 @@ herdr agent prompt grill-<N>-<短名> '/grill-with-docs <这批活的号 + 你�
    2026-08-26 实跑：一批三件活在开始实施前都是「还没占」，也就是说盘面上没人知道这几件活正在被做，不占住
    就是结构性隐形。**分支名从开 grill 那一刻起就不带阶段：`issue/<N>-<短名>`**（例如 `issue/927-labor-spec-mapping`），grill 和
    实施用的是同一条分支，占住记录里的分支名从头到尾不变。阶段只体现在 workspace / tab / agent 名上（`GRILL` → `WORKER`，
-   改名是一条命令）。*2026-10-13 John 定。为什么：分支名改起来代价高——开着 PR 时 GitHub 会跟着改，但别的会话本地
-   的 worktree、claim 评论里记的分支名都会失效——而同一条分支要从讨论一直用到实施完，带 `grill/` 的名字在实施阶段
-   名不副实。推翻条件：GitHub / herdr 有了不影响别处的分支改名方式，或 grill 不再在原分支接着实施。*
+   改名是一条命令）。命名本身以 `SKILL.md`「命名与标记」的表为准。*2026-10-13 用户定。为什么：同一条分支要从讨论
+   一直用到实施完，带 `grill/` 的名字在实施阶段名不副实；而分支改名代价高（为什么高、占住记录里的分支名为什么必须
+   和实际一致，归工作流说，GitHub 上见 `github-backlog` 的「The branch in the claim is the branch you work on」）。
+   推翻条件：分支改名不再影响别处，或 grill 不再在原分支接着实施。*
    **旧说法（留着，免得有人加回去）**：「分支名沿用 `grill/<议题>`、不改成 `fix/<N>`——接受现状，但占住记录里的
    分支名必须与它一致（Q4），否则会被同伴当成过期的占住抢走。」那是 2026-08-26 把 grill 和实施合并到同一条分支
    时的权宜：分支已经叫 `grill/…`，改名代价高，于是接受现状并补一条一致性提醒。从一开始就用不带阶段的名字，这条

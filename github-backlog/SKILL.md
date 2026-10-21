@@ -11,7 +11,7 @@ GitHub is operational; repository documents preserve requirements and decisions.
 
 Scripts below are written as `claim-issue.sh`; the installed path is `~/.agents/skills/github-backlog/scripts/claim-issue.sh` (or wherever you installed this skill). Run them from inside the repository's worktree.
 
-The human who accepts work before merge is called **the maintainer** below.
+The human who reviews and merges work is called **the maintainer** below. Merging the PR is the acceptance — see [Merged PR = accepted](#merged-pr--accepted).
 
 ## Route The Work
 
@@ -76,14 +76,27 @@ Requirements live in GitHub Issues. Lifecycle status is one label per Issue:
 
 - **`Backlog`** — initial state. Represented by **no status label**; there is no `Backlog` label.
 - **`In progress`** — an agent has claimed the Issue and is working it (see Selecting Work).
-- **`In review`** — implementation done and a PR is open, awaiting the maintainer's pre-merge acceptance. The assignee stays.
-- **`Done`** — set only after the maintainer's acceptance; accepted PRs merge and close their Issues.
+- **`In review`** — implementation done and a PR is open, awaiting the maintainer's review and merge. The assignee stays.
+- **`Done`** — set once the PR that implements it has **merged**. The merge is the acceptance; nothing further is awaited.
 
 Status is reversible: a grill that ends unclear rolls back to `Backlog`, and the claim is released. After merge, new findings use linked bug/follow-up Issues; do not reopen completed work.
 
 Exception markers are a separate axis — see [Exception Markers](#exception-markers). An Issue can be `blocked` while `In progress`; the exception never replaces the lifecycle status.
 
-Status transitions are agent-maintained (see Write Boundaries): `Backlog`/`In progress`/`In review` transitions require no preflight; `Done` requires the maintainer's acceptance first.
+Status transitions are agent-maintained (see Write Boundaries): `Backlog`/`In progress`/`In review` transitions require no preflight; `Done` requires the implementing PR to have merged.
+
+### Merged PR = accepted
+
+When the PR implementing an Issue has merged — `gh pr view <pr> --json state` reads `MERGED` **and** its merge commit is on the default branch — the Issue moves `In review` → `Done`. No separate sign-off from the maintainer is awaited: merging was the maintainer's acceptance. One command checks both halves and changes the labels:
+
+```bash
+close-merged.sh <pr> <issue>...       # verify landed, then In review -> Done
+close-merged.sh --check <pr>          # verify only
+```
+
+**This is not the same thing as an Issue being closed.** A development link or a `Closes #N` keyword can close an Issue without any PR having merged — a PR linked through the sidebar, a closing keyword on a PR that was itself closed unmerged, a manual close. Those are what *"`CLOSED` is not done"* (in [`for-dispatch.md`](for-dispatch.md) Q3) warns about, and they are still not acceptance. The trigger for `Done` is the merge, read from the PR, never the Issue's open/closed state.
+
+*Decided 2026-10-21 by the maintainer of the repository this skill was written for ("PR 合并了，算验收" — a merged PR counts as accepted).* **The earlier wording, kept so nobody restores it by accident:** "`Done` — set only after the maintainer's acceptance; accepted PRs merge and close their Issues", and in Write Boundaries, "Set `Done` (requires the maintainer's acceptance first) — Direct request after preflight". That treated acceptance as a separate step after merge, so a merged Issue had no defined moment at which it became `Done` — while the coordinator's cleanup script was already setting `Done` on every merge, contradicting this page. The maintainer resolved it for the merge: the merge already was the acceptance. **What would overturn this:** a repository where merging is not the maintainer's decision (for example, auto-merge on green checks, or merges by someone other than the acceptor) — there, acceptance needs its own signal again.
 
 Link Issues to documents; do not advance Markdown from an Issue or PR.
 
@@ -174,6 +187,13 @@ claim: <branch> · <UTC ISO8601>
   host: <hostname>  sid: <session id, first 8>  pid: <process id>
   sock: <messaging socket path, or "none">
 ```
+
+**The branch in the claim is the branch you work on.** A peer finds your work from the claim's first field, so that name must match the branch you actually commit to, from the claim onward. Two consequences:
+
+- Claim from the branch you will implement on. If you must switch branches, post a fresh `claim:` naming the new one — the latest unreleased claim is the one peers read.
+- **Do not rename a branch once its PR is open.** GitHub follows the rename on the PR, but nothing else does: other sessions' local worktrees and every `claim:` comment still carry the old name, and a claim naming a branch that no longer exists reads as stale (step 5) — someone will reclaim live work.
+
+(How branches are *named* is not this skill's business — the `dispatch` skill fixes the naming when it launches workers. Before 2026-10-21 the mapping page carried a naming example of its own, `grill/<topic>`, which dispatch had already dropped; see [`for-dispatch.md`](for-dispatch.md) Q4.)
 
 `worktree:` takes either form — the script emits it relative to the repo root, the fallback below emits it absolute. Both resolve; what matters is that it names a directory that exists.
 
@@ -364,7 +384,8 @@ When creating a PR that implements an Issue, add `Closes #N` (or `Fixes #N` for 
 | Status label transitions `Backlog` / `In progress` / `In review` (one Issue, at the workflow trigger point) | No preflight; automatic |
 | Apply or clear `blocked` (with its reason comment) | No preflight; automatic |
 | Apply `deferred`, `duplicate`, or `wontfix` (each closes or parks work) | Direct request after preflight |
-| Set `Done` (requires the maintainer's acceptance first) | Direct request after preflight |
+| Set `Done` after the implementing PR merged (`close-merged.sh`) | No preflight; automatic |
+| Set `Done` on an Issue whose PR has **not** merged | Direct request after preflight |
 | One explicit Issue create/comment/verified transition | Direct request after preflight |
 | One explicit PR create/comment/review request | Direct request after preflight (body includes `Closes #N` for the Issue it implements) |
 | Merge or close a PR | Direct request after base/head, checks/reviews, conflicts, and Issue verification |
@@ -386,11 +407,11 @@ Release per the repository's own procedure — for example synchronized `VERSION
 
 ## Acceptance Feedback
 
-The maintainer accepts while the Issue is in `In review` (before merge). Small in-scope changes revise the same PR and repeat acceptance. Material scope/rule changes need a linked follow-up Issue; do not expand the accepted PR. After merge, new findings use linked bug/follow-up Issues; do not reopen completed work.
+The maintainer reviews while the Issue is in `In review`, and accepts by merging. Small in-scope changes revise the same PR and are reviewed again. Material scope/rule changes need a linked follow-up Issue; do not expand the accepted PR. After merge, new findings use linked bug/follow-up Issues; do not reopen completed work.
 
 ## Answering The Dispatch Skill
 
-The `dispatch` skill does not know GitHub. It names four questions a workflow must answer (Q1 what work exists, Q2 how it is held, Q3 how it is delivered, Q4 which branch it is on) and two optional ones (QA where coordinator check marks go, QB how a container's completion is read). When you run `dispatch` with this skill as its workflow, **read [`for-dispatch.md`](for-dispatch.md)** — it maps each question to the commands and readings on this page, plus the GitHub-only traps the coordinator hits.
+The `dispatch` skill's rules do not know GitHub (two of its scripts do: its `closeout.sh` calls this skill's `close-merged.sh`, and its patrol watches PRs with `gh`). It names four questions a workflow must answer (Q1 what work exists, Q2 how it is held, Q3 how it is delivered, Q4 which branch it is on) and two optional ones (QA where coordinator check marks go, QB how a container's completion is read). When you run `dispatch` with this skill as its workflow, **read [`for-dispatch.md`](for-dispatch.md)** — it maps each question to the commands and readings on this page, plus the GitHub-only traps the coordinator hits.
 
 ## Common Mistakes
 
@@ -415,4 +436,4 @@ The `dispatch` skill does not know GitHub. It names four questions a workflow mu
 - Closing a solution-titled Issue because its solution is now forbidden. Rewrite it to the pain instead; closing it deletes the only record that the problem exists.
 - `Closes #123` is valid only after the maintainer's pre-merge acceptance.
 - Status is a label on the Issue, not a Project field. One status label per Issue.
-- Setting `Done` on your own; wait for the maintainer's acceptance.
+- Setting `Done` on an Issue whose PR has not merged — or because the Issue reads `CLOSED`. The trigger is the merge, read from the PR (`close-merged.sh`).

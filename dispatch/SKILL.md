@@ -111,7 +111,7 @@ PR 已合并、一个 PR 在审、都在等通知），新会话把它们当成�
 - 在审的交付物，以及每一件合并后要做什么（通知谁、带什么话）；
 - 等用户回答的问题、答应用户还没做的事；
 - 用户这一轮给的授权和决定（已经写进记忆的标一下）；
-- 巡检怎么跑（后台脚本放在交接文件同一目录，别放在会被清掉的临时目录）；
+- 巡检怎么跑（`scripts/scan-workers.sh` 带的环境变量；另写的脚本放在交接文件同一目录，别放在会被清掉的临时目录）；
 - 这一轮踩到的坑；不归自己管、别动的东西。
 
 写完把路径告诉用户，提醒他新会话里运行 `/dispatch` 就会读到。
@@ -373,6 +373,9 @@ worker rebase 后自查出一处因外部消耗未跟随重算导致的假双扣
 
 #### 发牌序列
 
+claude kind 的 ①–③ 已经串成 `scripts/launch.sh`（`REPO=<仓库> [MODEL=…] launch.sh <分支> <标签> <agent 名> <指令文件>
+<独特串>`，最后一行给出 transcript 里数到的送达次数，不是 1 就按 ③ 处理）；④ 仍要你自己盯。下面是它做的每一步。
+
 ```bash
 # ① 建隔离工作区（连带建好 workspace + tab + 已 cd 的 pane）
 herdr worktree create --cwd <repo根> --branch <分支名> --base main \
@@ -454,11 +457,17 @@ worker 起在**它自己的 herdr workspace** 里。用户待在原来那个 wor
 
 - **死活与状态**：`herdr agent list` + 对每个活着的 agent 读回滚佐证 + 比 pid 查重启，按 `herdr-agents`
   §3、§6。判「停摆」必须四个信号全真。
-- **五问**（归属 / 偏差 / 冲突 / 僵尸 / 阻塞），外加一次真的会跑的撞号扫描 `scripts/scan-collisions.sh`。
+- **事件流**：用 Monitor 挂 `scripts/scan-workers.sh`，有变化才叫醒你，另有 5 分钟一次的心跳；用法与每种事件怎么
+  反应见它的文件头和 `patrol.md`「事件流」。
+- **五问**（归属 / 偏差 / 冲突 / 僵尸 / 阻塞），外加一次真的会跑的撞号扫描 `scripts/scan-collisions.sh`
+  （`scan-workers.sh` 每轮已经替你跑）。
 - **占住状态**：对不归你管的 session 也按 Q2 读，但「活性未知」**绝不能读成「死了、可以抢」**。
 - **做完的判定以地面事实为准**：「已关闭/已完成」不等于做完；容器是「做完了却没人关」。
 - **grill agent 长时间 idle 是正常的**，看结论有没有写回（Q3），不看状态。
 - **未完成交付物的年龄**、**核查标记**、**合并计划**。
+- **合并后收尾**：`REPO=<仓库> scripts/closeout.sh <PR> <Issue> <agent 名>`——核落地 → Issue 改 Done → worker `/exit`
+  → 删库 → 删 worktree → 关 workspace → 删本地分支。给正忙的 worker 带话用 `scripts/deliver-when-idle.sh`（等它停下、
+  输入框空了才发）。
 - 发现冲突 → 改派或叫停（叫停按 `herdr-agents` §4）。worker 空了 → **回步骤 1 重新勘察分组，然后回步骤 3
   报牌等用户挑** —— 不要自动补牌。
 

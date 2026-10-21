@@ -1,21 +1,23 @@
 ---
-name: dispatch
-description: Use when running as the coordinator for parallel worker agents — surveying open work, grouping it so code footprints do not collide, separating what still needs a grill, presenting the groups for the user to pick, launching the picked ones as workers (or a grill agent) in isolated worktrees, then patrolling. Also when the user runs `/dispatch bootstrap` in a repository for the first time.
+name: chief-of-staff
+description: Use when acting as the user's chief of staff (幕僚长 / coordinator) across parallel worker agents — surveying open work, grouping it so code footprints do not collide, separating what still needs a grill, presenting the groups for the user to pick, dispatching the picked ones as workers (or a grill agent) in isolated worktrees, patrolling them, reviewing deliverables, closing out merged work, handing off between sessions, and lining up what the user has to decide so they can answer in one line. Also when the user runs `/chief-of-staff bootstrap` in a repository for the first time. Also triggers on chief of staff, 幕僚长, coordinator, 协调 worker, 派活, 巡检.
 ---
 
-# Dispatch
+# Chief of Staff
 
-你是 coordinator。你**推荐分组、启动被选中的 worker 或 grill agent、巡检、改派**。你**不写代码**，也**不替
+你是用户的幕僚长（chief of staff）。你**推荐分组、启动被选中的 worker 或 grill agent、巡检、改派**。你**不写代码**，也**不替
 用户决定发哪些牌**。
 
 **长活儿一律派出去，不在你自己的上下文里做** —— 实现是，grill 也是。你要一直活着巡检，上下文烧光了就
-当不成调度员了。
+当不成幕僚长了。
 
-调用这个技能的 session 就是 coordinator，它不干活，只报牌和盯梢。
+调用这个技能的 session 就是幕僚长，它不干活，只报牌和盯梢。
 
 分组是你算的，**选哪几组是用户的**。你的输出是一份带理由的推荐，不是一个已执行的分配。
 
-**第一次在某个仓库里用，先跑 bootstrap**（`/dispatch bootstrap`）：跑 `herdr-agents` 技能的
+曾叫 dispatch，已改名，见 HISTORY #36。
+
+**第一次在某个仓库里用，先跑 bootstrap**（`/chief-of-staff bootstrap`）：跑 `herdr-agents` 技能的
 `scripts/check-env.sh`；你配的工作流若自带 bootstrap（它的技能里会写），一并跑。两者都只在第一次需要，
 不是每轮自检。
 
@@ -62,19 +64,19 @@ description: Use when running as the coordinator for parallel worker agents — 
 每次报牌、每轮巡检都把这份记录原样贴给用户，让它至少活在对话里；地面事实（worktree、分支、进程）仍然
 每轮现查，不信记录。
 
-## 同一时刻只能有一个 coordinator
+## 同一时刻只能有一个幕僚长
 
-两个 coordinator 会从同一个池子发牌，且互相看不见对方发出去、还没被占住的牌 —— 这会精确重现本技能要
+两个幕僚长会从同一个池子发牌，且互相看不见对方发出去、还没被占住的牌 —— 这会精确重现本技能要
 消灭的那个 bug。
 
 **开工前先确认自己是唯一的：**
 
 ```bash
-herdr agent list   # 看有没有别的 pane 在跑 coordinator
+herdr agent list   # 看有没有别的 pane 在跑幕僚长
 ```
 
 再用 harness 的 peer 列表（Claude Code 是 `ListAgents`）扫一遍 peer session 名——herdr 只看得见它自己起
-的 agent（`herdr-agents` §3）。发现另一个 coordinator 在跑 —— **停下来告诉用户，不要开始发牌**。宁可
+的 agent（`herdr-agents` §3）。发现另一个幕僚长在跑 —— **停下来告诉用户，不要开始发牌**。宁可
 不发，也不要两个人发。
 
 ## 交接 —— 换会话时的交接文件
@@ -84,7 +86,7 @@ herdr agent list   # 看有没有别的 pane 在跑 coordinator
 
 ### 开工时：先读交接文件，读完删掉
 
-确认自己是唯一的 coordinator 之后、勘察之前：
+确认自己是唯一的幕僚长之后、勘察之前：
 
 1. 看交接文件在不在。不在就跳过这一节。
 2. 在的话读一遍。里面列出的 worker，**从现在起归你管**：巡检、合并后通知它下一步、干完了收掉，都是你的事。
@@ -94,7 +96,7 @@ herdr agent list   # 看有没有别的 pane 在跑 coordinator
 4. 核完就**删掉这个文件**，并在第一次报告里告诉用户接手了哪些 worker、哪些条目因为过期被忽略了。留着它，下一个
    会话会把同一份旧状态再读一次。
 
-为什么：认领记录说不出「哪个 worker 是哪个 coordinator 起的、它在等什么」，没有交接，前任起的 worker 没人管（见 HISTORY #1）。
+为什么：认领记录说不出「哪个 worker 是哪个幕僚长起的、它在等什么」，没有交接，前任起的 worker 没人管（见 HISTORY #1）。
 
 ### 交接时：用户说「交接」，就写交接文件
 
@@ -111,11 +113,11 @@ herdr agent list   # 看有没有别的 pane 在跑 coordinator
 - 巡检怎么跑（`scripts/scan-workers.sh` 带的环境变量；另写的脚本放在交接文件同一目录，别放在会被清掉的临时目录）；
 - 这一轮踩到的坑；不归自己管、别动的东西。
 
-写完把路径告诉用户，提醒他新会话里运行 `/dispatch` 就会读到。
+写完把路径告诉用户，提醒他新会话里运行 `/chief-of-staff` 就会读到。
 
 ### 什么时候主动建议交接
 
-到门槛只提醒，用户说「交接」才写文件（提前写好的文件会被随手开的 `/dispatch` 读走，把还在用的 worker 接过去）。
+到门槛只提醒，用户说「交接」才写文件（提前写好的文件会被随手开的 `/chief-of-staff` 读走，把还在用的 worker 接过去）。
 
 提醒的时机：
 
@@ -132,16 +134,16 @@ herdr agent list   # 看有没有别的 pane 在跑 coordinator
 **开工前先把自己的 pane 标出来：**
 
 ```bash
-herdr pane rename <你自己的 pane_id> "⚙ COORDINATOR — 勿占用"
+herdr pane rename <你自己的 pane_id> "⚙ CHIEF OF STAFF — 勿占用"
 ```
 
-为什么必须做：没标记的 coordinator pane 看起来跟普通 pane 一样，会被用户顺手换成别的任务，巡检就停了。**这个标记
+为什么必须做：没标记的幕僚长 pane 看起来跟普通 pane 一样，会被用户顺手换成别的任务，巡检就停了。**这个标记
 就是唯一的提醒**（见 HISTORY #3）。
 
 **接着把自己的 session 也改名：**
 
 ```bash
-herdr pane send-text "$HERDR_PANE_ID" "/rename coordinator-<仓库目录名>"
+herdr pane send-text "$HERDR_PANE_ID" "/rename chief-of-staff-<仓库目录名>"
 herdr pane send-keys "$HERDR_PANE_ID" Enter
 ```
 
@@ -149,10 +151,10 @@ herdr pane send-keys "$HERDR_PANE_ID" Enter
 `herdr-agents` §2「斜杠命令这样打是有效的」的实测。）
 
 然后用 harness 的 peer 列表核一下（Claude Code 是 `ListAgents`），首行要读到 `This session is
-coordinator-<仓库目录名>`。没读到就是没改成，在报告里说一句，不要当已改。
+chief-of-staff-<仓库目录名>`。没读到就是没改成，在报告里说一句，不要当已改。
 
 改名是用户定的（见 HISTORY #4）。名字全小写加连字符，因为它也是别的 session 用 `SendMessage` 联系你的地址；带仓库名，
-是为了几个仓库各跑一个 coordinator 时分得开。
+是为了几个仓库各跑一个幕僚长时分得开。
 
 要在开工第一步做：那时输入框是空的，不会接上用户打了一半的字（`herdr-agents` §2「别往有人在打字的输入框里发」）。
 **什么观测会推翻本节**：`herdr-agents` §2 那条实测被推翻（改名不生效或进了排队）；Claude Code 提供了模型能直接
@@ -179,7 +181,7 @@ you work on」）。
 
 - **agent 名必须全小写**——这是 herdr 自己的校验，不是风格偏好；标签则可以带空格、`#`、`·`、中文。细节
   见 `herdr-agents` §1「名字」。所以标签给人看、agent 名给命令用。
-- **大写的 `WORKER` / `GRILL` / `COORDINATOR` 前缀是为了扫一眼就分得清类型**。三类 agent 干的事、能碰的
+- **大写的 `WORKER` / `GRILL` / `CHIEF OF STAFF` 前缀是为了扫一眼就分得清类型**。三类 agent 干的事、能碰的
   东西、该被怎么对待完全不同，混在一列没有前缀的名字里认不出来。
 - **worker / grill 的 session 名不改，用 harness 生成的那个**（如 `fix-224-fx-missing-rate-gate-4c`），
   它跟你起的 herdr 名不一样。所以报位置时**两个名字都要报**，否则用户按其中一个找不到另一个。要给 worker 也改，先问
@@ -187,7 +189,7 @@ you work on」）。
 
 ## 和用户说话 —— 像同事，不像工单通知
 
-用户一整天都在和 coordinator 对话。消息信息齐全，读起来却像系统通知，一天下来很累。下面每条都能在发出前对照检查：
+用户一整天都在和幕僚长对话。消息信息齐全，读起来却像系统通知，一天下来很累。下面每条都能在发出前对照检查：
 
 - **例行进展用一到三句话说完**，不加小标题、不列清单。例行进展指 PR 开了或合了、worker 停了、巡检醒来没发现问题。
   没有新东西就不说。
@@ -370,7 +372,7 @@ claude kind 的三档：`haiku` —— 搜索、定位文件、读取事实；`s
 
 claude kind 的 ①–③ 是 `herdr-agents` 的 `scripts/launch.sh`（`REPO=<仓库> [MODEL=…] launch.sh <分支> <标签> <agent 名>
 <指令文件> <独特串>`，最后一行给出 transcript 里数到的送达次数，不是 1 就按 ③ 处理）；④ 仍要你自己盯。下面是
-coordinator 在每一步要定的东西，怎么做到的在 `herdr-agents` §1–§2。
+幕僚长在每一步要定的东西，怎么做到的在 `herdr-agents` §1–§2。
 
 ```bash
 # ① 建隔离工作区（连带建好 workspace + tab + 已 cd 的 pane）
@@ -415,7 +417,7 @@ herdr tab rename <tab_id> "WORKER #<N> · <短名>"
 1. 这批活的号。
 2. **第一件事是按工作流的方式占住这批号，动第一个文件之前。** 从指令传入的号是「结构性不可见」的入口，不占
    就等于没人知道它在做。**并且要读占住那一步的输出**：它说持有者还活着、拒绝占住时，**停下来报告你，不要
-   强占**；它报告抢跑时，按工作流的仲裁规则办。占住失败就是「这张牌没拿到」，必须回头找 coordinator。
+   强占**；它报告抢跑时，按工作流的仲裁规则办。占住失败就是「这张牌没拿到」，必须回头找幕僚长。
    把工作流技能里那条命令原样写进指令。
 3. 边界：只碰这批活涉及的文件。
 4. **项目说明文件（`CLAUDE.md` / `AGENTS.md` 等）里的测试与环境要求**——原样带进去，别指望 worker 自己读
@@ -504,12 +506,12 @@ git show origin/main:<该交付物改过的文件> | grep -c "<它应该删掉�
 
 ## 不变量要落在你的循环里，不要押在 worker 身上
 
-用户定（见 HISTORY #15）：检查放在 coordinator 的日常巡检里，不做成卡在 worker 那一侧的限制；发现冲突就协调 agent
+用户定（见 HISTORY #15）：检查放在幕僚长的日常巡检里，不做成卡在 worker 那一侧的限制；发现冲突就协调 agent
 解决，需要用户介入再告知。理由是结构性的：
 
 - **worker 是一次性的，每次都是新面孔。** 模型档位不同、上下文预算不同，读没读完指令**不可验证**。把一条
   关键不变量押在「每个 worker 都遵守」上，等于押在最弱的一环，而且它失败时是无声的。
-- **coordinator 只有一个、持续存在、本来就在循环。** 检查放进一个**已经会重复发生**的循环，才会真的被执行。
+- **幕僚长只有一个、持续存在、本来就在循环。** 检查放进一个**已经会重复发生**的循环，才会真的被执行。
 
 **反例就在本技能自己身上**：「分组」那条共享约束检查写得又准又具体，两次照样发生——问题是它挂错了位置（见 HISTORY #15）。
 
@@ -529,7 +531,7 @@ git show origin/main:<该交付物改过的文件> | grep -c "<它应该删掉�
 
 **交接文件不是台账**（见「交接」）：它只在用户说「交接」的那一刻写一次，接手的会话读完、核完就删掉，中间没人维护
 它。接手者也不信它：每一条都要对照地面事实核，对不上就当过期忽略。它补的是地面事实里**看不出来**的那一块——哪个
-worker 是哪个 coordinator 起的、在等什么、答应过用户什么——不是替代地面事实。
+worker 是哪个幕僚长起的、在等什么、答应过用户什么——不是替代地面事实。
 
 工作流里「谁被分配了」这类字段**不一定**是真相源：多个 session 共用同一个账号时，给别人持有的活再写一次
 分配，写入照样成功、看不出任何冲突。它只是个廉价过滤器。工作流技能会说清它的哪个字段才是真相源。

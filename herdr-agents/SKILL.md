@@ -1,6 +1,6 @@
 ---
 name: herdr-agents
-description: Use when driving another coding agent (claude / agy / opencode) through herdr — starting it, confirming it is ready, getting an instruction delivered exactly once, reading it back, interrupting it, passing messages between agents, or telling stuck from finished from restarted. Also reached by the dispatch skill for every worker it launches.
+description: Use when driving another coding agent (claude / agy / opencode) through herdr — starting it, confirming it is ready, getting an instruction delivered exactly once, reading it back, interrupting it, passing messages between agents, or telling stuck from finished from restarted. Also reached by the chief-of-staff skill for every worker it launches.
 ---
 
 # herdr-agents
@@ -275,7 +275,7 @@ off=$(herdr pane get <p> | jq '.result.pane.scroll.offset_from_bottom')
 herdr 对 agy 没有生命周期 hook，状态只靠屏幕 manifest。agy 遇到 `⚠ Internal error encountered`（或
 `The request contains invalid parameters`）会停住等人叫醒，而 remote manifest `2026.10.05.1` 里没有规则认这行，
 落到默认的 `idle`——不是 `blocked`。所以 agy 的 working→idle（`agent_status`、`agent wait`、
-`pane.agent_status_changed`、dispatch 的 `AGENT-STATUS`）每次都要读 `recent` 的底部，看输入框上方有没有那行报错。
+`pane.agent_status_changed`、chief-of-staff 的 `AGENT-STATUS`）每次都要读 `recent` 的底部，看输入框上方有没有那行报错。
 herdr 0.9.5 + manifest `2026.10.05.1` 下用 `agent explain --file` 测过（HISTORY #2）。
 **推翻条件**：`herdr agent explain --file <报错屏> --agent agy` 给出 `blocked`，或真实报错屏读成 `working`。
 

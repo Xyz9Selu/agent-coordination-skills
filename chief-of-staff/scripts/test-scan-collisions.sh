@@ -3,10 +3,10 @@
 # scan-collisions.sh 的可重复测试。每个场景在临时目录里建一个最小仓库（一个裸 origin + 一份 clone），
 # 造几个假迁移文件 / ADR，跑扫描，断言输出和退出码。不碰网络、不碰 gh、不读用户的 git 配置。
 #
-# 用法：dispatch/scripts/test-scan-collisions.sh            测同目录下的 scan-collisions.sh
+# 用法：chief-of-staff/scripts/test-scan-collisions.sh            测同目录下的 scan-collisions.sh
 #       SCAN=<别的脚本> LEGACY=1 test-scan-collisions.sh     测旧版（旧版不收 ref 参数，扫全部远端分支）
 #
-# 旧版在「分叉」「接在过时的 head 上」和「先占者保号」上判失败，见 dispatch/HISTORY.md #29。
+# 旧版在「分叉」「接在过时的 head 上」和「先占者保号」上判失败，见 chief-of-staff/HISTORY.md #29。
 
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

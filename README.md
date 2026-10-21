@@ -10,23 +10,23 @@ overturn it. Decisions the user made are stated as decisions.
 |---|---|---|---|
 | [`herdr-agents`](herdr-agents/SKILL.md) | Driving agents through herdr: start, confirm ready, deliver an instruction exactly once, read back, interrupt, pass messages between agents, tell alive / stuck / finished / restarted apart, wrap up | herdr (and the official `herdr` skill) | Yes |
 | [`github-backlog`](github-backlog/SKILL.md) | Managing work in GitHub Issues: pick tasks, claim them, labels, PR conventions, acceptance | `gh` | Yes |
-| [`dispatch`](dispatch/SKILL.md) | The coordinator: group work by code footprint to avoid collisions, recommend groups for the user to pick, launch workers, patrol | **`herdr-agents`** (required); a task system is optional | Needs `herdr-agents` |
+| [`chief-of-staff`](chief-of-staff/SKILL.md) | The user's chief of staff: survey work, group it by code footprint to avoid collisions, recommend groups for the user to pick, launch workers, patrol, close out, hand off | **`herdr-agents`** (required); a task system is optional | Needs `herdr-agents` |
 | [`todo-recorder`](todo-recorder/SKILL.md) | Record-only: the user states requirements, you write them to `TODO.md` at the repo root (or to an issue when explicitly asked). Never implements | None | Yes |
 | [`todo-executor`](todo-executor/SKILL.md) | Execute: scan `TODO.md`, pick items, implement, tick them off, commit, loop until none are left | None | Yes |
 
-`dispatch`'s rules know nothing about GitHub. They state the questions a "workflow" must answer (what work exists,
+`chief-of-staff`'s rules know nothing about GitHub. They state the questions a "workflow" must answer (what work exists,
 how to claim it, how to hand it in, which branch a task maps to). With no workflow configured it falls back to
-a list the user gives in conversation. To manage work on GitHub, use `dispatch` + `github-backlog` together;
-[`for-dispatch.md`](github-backlog/for-dispatch.md) in the latter maps one onto the other.
-Two of `dispatch`'s scripts do touch GitHub, and say so: `closeout.sh` calls `github-backlog`'s `close-merged.sh`
+a list the user gives in conversation. To manage work on GitHub, use `chief-of-staff` + `github-backlog` together;
+[`for-chief-of-staff.md`](github-backlog/for-chief-of-staff.md) in the latter maps one onto the other.
+Two of `chief-of-staff`'s scripts do touch GitHub, and say so: `closeout.sh` calls `github-backlog`'s `close-merged.sh`
 (so it needs `gh` and the `github-backlog` skill installed next to it), and `scan-workers.sh` watches open PRs with
 `gh` (turn that off with `WATCH_PRS=0`).
 
-`todo-recorder` / `todo-executor` are a much lighter `TODO.md`-based flow than `dispatch` + `github-backlog`:
+`todo-recorder` / `todo-executor` are a much lighter `TODO.md`-based flow than `chief-of-staff` + `github-backlog`:
 no issue claiming, no collision grouping, just "write it down" and "do them one by one". They can be combined with
 `github-backlog` (`todo-recorder` can route entries to issues when explicitly asked) or used entirely on their own.
 
-> **Language note:** `herdr-agents` and `dispatch` are currently written in Chinese; `github-backlog`,
+> **Language note:** `herdr-agents` and `chief-of-staff` are currently written in Chinese; `github-backlog`,
 > `todo-recorder` and `todo-executor` are in English (with a few Chinese trigger phrases). Agents read either
 > fine, and translations of the Chinese skills are welcome.
 
@@ -42,19 +42,19 @@ no issue claiming, no collision grouping, just "write it down" and "do them one 
 | `github-backlog/scripts/bootstrap.sh` | github-backlog | Checks `gh` and the repo; lists missing labels and creates them only after confirmation (`--check` lists only) | Creates labels after confirmation |
 | `github-backlog/scripts/claim-issue.sh` | github-backlog | Claim an issue, read-only check (`--check`), `--self-test` | Writes the issue when claiming |
 | `github-backlog/scripts/close-merged.sh` | github-backlog | After merge: verify the PR landed, move its Issue `In review` → `Done` (`--check` verifies only) | Changes Issue labels |
-| `dispatch/scripts/scan-collisions.sh` | dispatch | Scans for migration / ADR number collisions across branches (`MIGRATION_DIR` and/or `ADR_DIR` required; `--prs` uses `gh`) | No |
-| `dispatch/scripts/test-scan-collisions.sh` | dispatch | Builds each collision case in a temporary repo and checks `scan-collisions.sh`'s output and exit code | Only in a temp dir |
-| `dispatch/scripts/scan-workers.sh` | dispatch | Patrol event stream for the Monitor tool: agents, PRs (`gh`), main moving, collisions, heartbeat | No (only `git fetch`) |
-| `dispatch/scripts/closeout.sh` | dispatch | After a PR merges, runs the cleanup in order: `close-merged.sh` → `retire.sh exit` → the project's `DROP_DB_CMD` → `retire.sh remove` → delete the local branch | Yes — labels, worktree, workspace, branch, and whatever `DROP_DB_CMD` does |
+| `chief-of-staff/scripts/scan-collisions.sh` | chief-of-staff | Scans for migration / ADR number collisions across branches (`MIGRATION_DIR` and/or `ADR_DIR` required; `--prs` uses `gh`) | No |
+| `chief-of-staff/scripts/test-scan-collisions.sh` | chief-of-staff | Builds each collision case in a temporary repo and checks `scan-collisions.sh`'s output and exit code | Only in a temp dir |
+| `chief-of-staff/scripts/scan-workers.sh` | chief-of-staff | Patrol event stream for the Monitor tool: agents, PRs (`gh`), main moving, collisions, heartbeat | No (only `git fetch`) |
+| `chief-of-staff/scripts/closeout.sh` | chief-of-staff | After a PR merges, runs the cleanup in order: `close-merged.sh` → `retire.sh exit` → the project's `DROP_DB_CMD` → `retire.sh remove` → delete the local branch | Yes — labels, worktree, workspace, branch, and whatever `DROP_DB_CMD` does |
 
-`/dispatch bootstrap` runs `check-env.sh`, then the bootstrap of the workflow you configured (for GitHub, `bootstrap.sh`).
+`/chief-of-staff bootstrap` runs `check-env.sh`, then the bootstrap of the workflow you configured (for GitHub, `bootstrap.sh`).
 
 ## Install (user level)
 
 ```bash
 git clone https://github.com/Xyz9Selu/agent-coordination-skills.git ~/src/agent-coordination-skills
 mkdir -p ~/.agents/skills ~/.gemini/config/skills
-for s in herdr-agents github-backlog dispatch todo-recorder todo-executor; do
+for s in herdr-agents github-backlog chief-of-staff todo-recorder todo-executor; do
   ln -s ~/src/agent-coordination-skills/$s ~/.agents/skills/$s          # Claude Code, OpenCode
   ln -s ~/src/agent-coordination-skills/$s ~/.gemini/config/skills/$s   # agy
 done

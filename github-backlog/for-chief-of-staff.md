@@ -1,6 +1,6 @@
-# 给 dispatch 用：GitHub 怎么回答它的问题
+# 给 chief-of-staff 用：GitHub 怎么回答它的问题
 
-`dispatch` 技能的规则不认识 GitHub，它只列出工作流要回答的问题（它的 `SKILL.md`「工作流要回答的问题」）。用本技能当它的
+`chief-of-staff` 技能的规则不认识 GitHub，它只列出工作流要回答的问题（它的 `SKILL.md`「工作流要回答的问题」）。用本技能当它的
 工作流时，答案如下。**本页只放映射和 GitHub 独有的坑；规则本身以 [`SKILL.md`](SKILL.md) 为准，两边不一致时那边
 是权威。**
 
@@ -23,15 +23,15 @@
 
 > 第一件事是跑 `~/.agents/skills/github-backlog/scripts/claim-issue.sh <这批号>`，动第一个文件之前。并且要读它的
 > 输出：持有者活着时它会 `REFUSING to claim` 并退非零（**这时候停下来报告你，不要 `--force`**），抢跑时它会打印
-> `⚠ N unreleased claims` 并告诉你最早时间戳赢。退非零就是「这张牌没拿到」，必须回头找 coordinator。
+> `⚠ N unreleased claims` 并告诉你最早时间戳赢。退非零就是「这张牌没拿到」，必须回头找幕僚长。
 
 这个脚本不是锁 —— 所有 session 用同一个 GitHub 账号时，assignee 那次写入不可能失败。它的价值全在输出里。
 
-**coordinator 读占住状态用 `claim-issue.sh --check <N>...`（只读），不要手搓 `gh issue view` 抓评论。** 它多给
+**幕僚长读占住状态用 `claim-issue.sh --check <N>...`（只读），不要手搓 `gh issue view` 抓评论。** 它多给
 两样你正需要的：**活性判定**，以及**回收依据**（分支在不在、两天内有没有提交、相对主干有几个未合并提交、分支上的
-PR 状态）。输出与 `dispatch` 的四个读数一一对应：
+PR 状态）。输出与 `chief-of-staff` 的四个读数一一对应：
 
-| `--check` 输出 | dispatch 的读数 |
+| `--check` 输出 | chief-of-staff 的读数 |
 |---|---|
 | `no prior claim` | 还没占 |
 | `HOLDER ALIVE` | 占了且活着 |
@@ -50,11 +50,11 @@ PR 状态）。输出与 `dispatch` 的四个读数一一对应：
   Issues」开 PR 时就写 `Closes #N`：合并时自动关 Issue，合并就是验收。
 - **grill 的结论写回 Issue 评论，不重写正文**（被 grill 过的 Issue 正文是旧的、评论是新的，这是有意的）。
 - **验收 = PR 合并。** 合并后 Issue 改 `Done`，不另等 maintainer（`SKILL.md`「Merged PR = accepted」）；命令是
-  `close-merged.sh <PR> <Issue>`，dispatch 的 `closeout.sh` 第一步就是它。
+  `close-merged.sh <PR> <Issue>`，chief-of-staff 的 `closeout.sh` 第一步就是它。
 - **`CLOSED` / `Done` 不等于做完了。** development 链接会在没有 PR 合并的情况下自动关 Issue，那不是验收；有一件
   Issue 就是 CLOSED + `Done` 而 worktree、分支、已退出的 session 全在盘上。以地面事实为准：看 PR 合没合，不看
   Issue 关没关。
-- **核「已合并」**（dispatch 的 `SKILL.md`「同伴递来的因果说法」里「人说的也要核」）：
+- **核「已合并」**（chief-of-staff 的 `SKILL.md`「同伴递来的因果说法」里「人说的也要核」）：
   ```bash
   gh pr view <N> --json state,mergedAt
   git show origin/main:<该 PR 改过的文件> | grep -c "<它应该删掉的东西>"
@@ -68,13 +68,13 @@ PR 状态）。输出与 `dispatch` 的四个读数一一对应：
 - Issue → 分支：最后一条 `claim:` 评论的第一个字段；`claim-issue.sh --check` 会打印它。
 - 分支 → Issue / PR：`gh pr list --head <分支名>`；分支名里带的号只是约定，**以 claim 评论为准**。
 - claim 评论里的分支名必须与实际分支一致、开了 PR 不改名——规则和理由在 `SKILL.md`「The branch in the claim is the
-  branch you work on」。分支怎么起名归 dispatch（它的「命名与标记」）。
+  branch you work on」。分支怎么起名归 chief-of-staff（它的「命名与标记」）。
 
 ## QA 核查标记：PR 标签
 
-`dispatch` 的三态核查标记在 GitHub 上是三个 **PR 标签**，`scripts/bootstrap.sh` 的 `dispatch` 组会列出、确认后建：
+`chief-of-staff` 的三态核查标记在 GitHub 上是三个 **PR 标签**，`scripts/bootstrap.sh` 的 `chief-of-staff` 组会列出、确认后建：
 
-| dispatch 的标记 | PR 标签 |
+| chief-of-staff 的标记 | PR 标签 |
 |---|---|
 | 占稀缺资源 | `占稀缺资源` |
 | 需按序合并 | `需按序合并` |
@@ -91,5 +91,5 @@ gh issue list --state open --limit 200 --json number,title,labels,subIssuesSumma
         | .[] | "#\(.number)  \(.subIssuesSummary.completed)/\(.subIssuesSummary.total)  \(.title)"'
 ```
 
-`gh api repos/<owner>/<repo>/issues/<N>/sub_issues` 能列出子项及其状态与标签。子项全完之后能不能关，按 `dispatch`
+`gh api repos/<owner>/<repo>/issues/<N>/sub_issues` 能列出子项及其状态与标签。子项全完之后能不能关，按 `chief-of-staff`
 的 `patrol.md`「容器没人关」判断——先读 parent 正文，带自己验收标准的逐条核实。

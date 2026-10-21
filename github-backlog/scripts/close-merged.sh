@@ -12,7 +12,7 @@
 #   REVIEW_LABEL="In review" DONE_LABEL=Done    the labels removed / added
 #
 # Output: one line per step; the LAST line is always `branch=<the PR's head branch>` on
-# success, so a caller (the dispatch skill's closeout.sh) can pick up the branch to clean up.
+# success, so a caller (the chief-of-staff skill's closeout.sh) can pick up the branch to clean up.
 # Exit: 0 = landed (and labels changed, unless --check); 1 = not merged / not on the base
 # branch (nothing written); 2 = usage. A failed label write is reported, not fatal: the
 # merge is a fact either way, and the caller still has cleanup to do.

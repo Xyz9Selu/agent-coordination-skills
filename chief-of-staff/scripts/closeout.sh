@@ -20,7 +20,7 @@
 # 工作流提供的「核落地 + 交差」命令。
 #
 # 为什么这样写：
-# · worktree 已经不在、数据库还在时，也按分支名删库（旧版漏过，见 dispatch/HISTORY.md #34）；
+# · worktree 已经不在、数据库还在时，也按分支名删库（旧版漏过，见 chief-of-staff/HISTORY.md #34）；
 # · /exit 之后确认 agent 真的从 `herdr agent list` 里消失，才删它脚下的 worktree；
 # · 收尾后跑一次 workspace 检查（herdr-agents §7 的完成判据）。
 # · 删库只认 DROP_DB_CMD，不自动探测仓库里的脚本：别的仓库碰巧有同名脚本会被当成同一套约定调用（见 HISTORY #34）。

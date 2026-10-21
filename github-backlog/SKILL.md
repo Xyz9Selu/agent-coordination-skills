@@ -1,6 +1,6 @@
 ---
 name: github-backlog
-description: Use when work is tracked in GitHub Issues and needs selecting, claiming, labelling, PR linking, acceptance, releases, or gh CLI coordination — especially when several agent sessions share one backlog. Also when the dispatch skill needs its workflow questions answered on GitHub.
+description: Use when work is tracked in GitHub Issues and needs selecting, claiming, labelling, PR linking, acceptance, releases, or gh CLI coordination — especially when several agent sessions share one backlog. Also when the chief-of-staff skill needs its workflow questions answered on GitHub.
 ---
 
 # GitHub Backlog
@@ -20,7 +20,7 @@ If you have these skills installed:
 - Feedback/bugs: `triage`; QA: `qa`.
 - Design/planning: `brainstorming`, then `writing-plans`; approved plans to Issues: `to-issues`.
 - GitHub sync: this skill.
-- Running several worker agents against this backlog: the `dispatch` skill, with this one as its workflow — see [Answering the dispatch skill](#answering-the-dispatch-skill).
+- Running several worker agents against this backlog: the `chief-of-staff` skill, with this one as its workflow — see [Answering the chief-of-staff skill](#answering-the-chief-of-staff-skill).
 
 ## Read Before Write
 
@@ -94,7 +94,7 @@ close-merged.sh <pr> <issue>...       # verify landed, then In review -> Done
 close-merged.sh --check <pr>          # verify only
 ```
 
-**This is not the same thing as an Issue being closed.** A development link or a `Closes #N` keyword can close an Issue without any PR having merged — a PR linked through the sidebar, a closing keyword on a PR that was itself closed unmerged, a manual close. Those are what *"`CLOSED` is not done"* (in [`for-dispatch.md`](for-dispatch.md) Q3) warns about, and they are still not acceptance. The trigger for `Done` is the merge, read from the PR, never the Issue's open/closed state.
+**This is not the same thing as an Issue being closed.** A development link or a `Closes #N` keyword can close an Issue without any PR having merged — a PR linked through the sidebar, a closing keyword on a PR that was itself closed unmerged, a manual close. Those are what *"`CLOSED` is not done"* (in [`for-chief-of-staff.md`](for-chief-of-staff.md) Q3) warns about, and they are still not acceptance. The trigger for `Done` is the merge, read from the PR, never the Issue's open/closed state.
 
 *The maintainer's decision. Was: acceptance as a separate step after the merge — overturned, see HISTORY #1.* It assumes merging is the acceptor's own decision; where it is not (auto-merge on green checks, merges by someone else), acceptance needs its own signal.
 
@@ -193,7 +193,7 @@ claim: <branch> · <UTC ISO8601>
 - Claim from the branch you will implement on. If you must switch branches, post a fresh `claim:` naming the new one — the latest unreleased claim is the one peers read.
 - **Do not rename a branch once its PR is open.** GitHub follows the rename on the PR, but nothing else does: other sessions' local worktrees and every `claim:` comment still carry the old name, and a claim naming a branch that no longer exists reads as stale (step 5) — someone will reclaim live work.
 
-(How branches are *named* is not this skill's business — the `dispatch` skill fixes the naming when it launches workers.)
+(How branches are *named* is not this skill's business — the `chief-of-staff` skill fixes the naming when it launches workers.)
 
 `worktree:` takes either form — the script emits it relative to the repo root, the fallback below emits it absolute. Both resolve; what matters is that it names a directory that exists.
 
@@ -407,9 +407,9 @@ Release per the repository's own procedure — for example synchronized `VERSION
 
 The maintainer reviews while the Issue is in `In review`, and accepts by merging. Small in-scope changes revise the same PR and are reviewed again. Material scope/rule changes need a linked follow-up Issue; do not expand the accepted PR. After merge, new findings use linked bug/follow-up Issues; do not reopen completed work.
 
-## Answering The Dispatch Skill
+## Answering The Chief-of-Staff Skill
 
-The `dispatch` skill's rules do not know GitHub (two of its scripts do: its `closeout.sh` calls this skill's `close-merged.sh`, and its patrol watches PRs with `gh`). It names four questions a workflow must answer (Q1 what work exists, Q2 how it is held, Q3 how it is delivered, Q4 which branch it is on) and two optional ones (QA where coordinator check marks go, QB how a container's completion is read). When you run `dispatch` with this skill as its workflow, **read [`for-dispatch.md`](for-dispatch.md)** — it maps each question to the commands and readings on this page, plus the GitHub-only traps the coordinator hits.
+The `chief-of-staff` skill's rules do not know GitHub (two of its scripts do: its `closeout.sh` calls this skill's `close-merged.sh`, and its patrol watches PRs with `gh`). It names four questions a workflow must answer (Q1 what work exists, Q2 how it is held, Q3 how it is delivered, Q4 which branch it is on) and two optional ones (QA where the chief of staff's check marks go, QB how a container's completion is read). When you run `chief-of-staff` with this skill as its workflow, **read [`for-chief-of-staff.md`](for-chief-of-staff.md)** — it maps each question to the commands and readings on this page, plus the GitHub-only traps the chief of staff hits.
 
 ## Common Mistakes
 

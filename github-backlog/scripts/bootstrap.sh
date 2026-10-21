@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# bootstrap.sh —— 第一次在某个 GitHub 仓库里用 github-backlog（单独用，或配合 dispatch）时跑一次。
+# bootstrap.sh —— 第一次在某个 GitHub 仓库里用 github-backlog（单独用，或配合 chief-of-staff）时跑一次。
 #
 # 为什么放在 github-backlog 里：它唯一会「写」的东西是 GitHub 标签，而标签清单必须和本技能
 # SKILL.md 实际用到的一致——清单放在定义这些标签的技能旁边，改一处就够。herdr 与 agent CLI 的
@@ -11,7 +11,7 @@
 #   2. 初始化：列出仓库里缺的标签，**列出后经用户确认再建**。已经有的不动（不改颜色、不改描述）。
 #      可以重复运行。标签分两组，分别确认：
 #        - backlog：本技能 SKILL.md 用到的状态 / 类型 / 优先级 / 例外标签；
-#        - dispatch：配合 dispatch 技能时，挂在 PR 上的三种核查标记（见 SKILL.md「给 dispatch 用」）。
+#        - chief-of-staff：配合 chief-of-staff 技能时，挂在 PR 上的三种核查标记（见 for-chief-of-staff.md「核查标记」）。
 #
 # 不做：配置文件、安装向导、自动安装依赖、每次运行前的自检。
 #
@@ -94,10 +94,10 @@ BACKLOG_LABELS=(
   "duplicate|cfd3d7|Exception: superseded by another Issue (closed)"
   "wontfix|ffffff|Exception: rejected (closed); needs a 'wontfix:' comment"
 )
-DISPATCH_LABELS=(
-  "占稀缺资源|d93f0b|本 PR 消耗迁移号/ADR 号/注册表项/端口等独占资源；细节见 coordinator 评论"
-  "需按序合并|fbca04|本 PR 有硬性前置，顺序错了会坏；前置与理由见 coordinator 评论"
-  "资源已核|0e8a16|coordinator 已核过资源足迹与两两冲突，结论在评论里（含基准 commit 与时间）。无此标签 = 尚未核"
+CHIEF_OF_STAFF_LABELS=(
+  "占稀缺资源|d93f0b|本 PR 消耗迁移号/ADR 号/注册表项/端口等独占资源；细节见幕僚长评论"
+  "需按序合并|fbca04|本 PR 有硬性前置，顺序错了会坏；前置与理由见幕僚长评论"
+  "资源已核|0e8a16|幕僚长已核过资源足迹与两两冲突，结论在评论里（含基准 commit 与时间）。无此标签 = 尚未核"
 )
 
 existing="$(mktemp)"
@@ -155,6 +155,6 @@ handle_group() {
 echo
 echo "===== 标签 ====="
 handle_group backlog "${BACKLOG_LABELS[@]}"
-handle_group dispatch "${DISPATCH_LABELS[@]}"
+handle_group chief-of-staff "${CHIEF_OF_STAFF_LABELS[@]}"
 echo
 echo "===== bootstrap 结束 ====="

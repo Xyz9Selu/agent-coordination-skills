@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# 稀缺顺序标识符撞号扫描 —— coordinator 巡检用（见 dispatch 技能 patrol.md「稀缺顺序标识符撞号」）。
+# 稀缺顺序标识符撞号扫描 —— 幕僚长巡检用（见 chief-of-staff 技能 patrol.md「稀缺顺序标识符撞号」）。
 #
 # 为什么存在：两条分支各占一个数据库迁移号或 ADR 编号时，**文件路径不冲突，git 会干净地把两个都合进去**，
 # 直到数据库升级报双头，或两份同号 ADR 同时躺在 ADR 目录里。分组时叮嘱每个 worker「别占号」失效过两次
-# （一次迁移双头、一次 ADR 撞号）—— 检查必须落在 coordinator 已经会重复发生的巡检循环里。
+# （一次迁移双头、一次 ADR 撞号）—— 检查必须落在幕僚长已经会重复发生的巡检循环里。
 #
 # 查什么（只看每个来源相对基准**新增 / 改动**的文件，`git diff --name-only <基准>...<分支>`）：
 #   迁移（Alembic 写法：文件里 `revision = '…'`、`down_revision = '…'` 或元组；按内容解析，不按文件名）
@@ -32,7 +32,7 @@
 #
 # 输出：发现撞号的每一行以 🔴 开头，内容只取决于各分支的内容，不含时间戳 —— 调用方可以直接 diff 两次的 🔴 行。
 #
-# 曾是只读 `revision`、扫全部 worktree 的旧版，已推翻（抓不到分叉与过时 head），见 dispatch/HISTORY.md #29。
+# 曾是只读 `revision`、扫全部 worktree 的旧版，已推翻（抓不到分叉与过时 head），见 chief-of-staff/HISTORY.md #29。
 
 set -uo pipefail
 
@@ -329,6 +329,6 @@ for h in hits:
     print("  🔴 " + h)
 print()
 print("  处理：先合并的保号，后合并的让路 —— 让路的一方改号（迁移还要把 down_revision 改接到那时的 head）；")
-print("  改掉的号若已被任务记录引用，连带更新引用。来历见 dispatch 技能 patrol.md「稀缺顺序标识符撞号」。")
+print("  改掉的号若已被任务记录引用，连带更新引用。来历见 chief-of-staff 技能 patrol.md「稀缺顺序标识符撞号」。")
 sys.exit(1)
 PY

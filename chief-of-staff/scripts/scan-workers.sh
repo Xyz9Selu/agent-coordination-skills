@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# coordinator 巡检的事件流：每 INTERVAL 秒看一遍盘面，**每行输出 = 一个事件**，没变化就不出声（心跳除外）。
+# 幕僚长巡检的事件流：每 INTERVAL 秒看一遍盘面，**每行输出 = 一个事件**，没变化就不出声（心跳除外）。
 # 只读：不写 gh、不写 git，唯一的写是 `git fetch`。
 # 依赖：herdr、git；盯 PR（PR-* 事件、撞号扫描的 --prs）要 gh 且仓库在 GitHub 上 —— 不是的话设 WATCH_PRS=0。
 #
@@ -8,9 +8,9 @@
 # 用 Claude Code 的 Monitor 工具（每行 stdout 变成一条通知）：
 #
 #   Monitor(
-#     description: "dispatch 巡检 <仓库名>",
+#     description: "chief-of-staff 巡检 <仓库名>",
 #     command: "REPO=/path/to/repo MIGRATION_DIR=<迁移目录> ADR_DIR=<ADR 目录> \
-#               ~/.agents/skills/dispatch/scripts/scan-workers.sh",
+#               ~/.agents/skills/chief-of-staff/scripts/scan-workers.sh",
 #     timeout_ms: 1800000)           # 上限 30 分钟；到期收到通知就原样再挂一次
 #
 # 重挂会丢掉内存里的状态：第一轮只记基线、不报变化，然后出一行 SCAN-READY 当快照。
@@ -24,7 +24,7 @@
 #   DEFAULT_REMOTE=origin  DEFAULT_BRANCH=main
 #   WATCH_PRS=1    0 = 不调 gh：不出 PR-* 事件，撞号只扫 worker 的 worktree（开头说一次）
 #
-# ── 事件，以及 coordinator 该怎么反应 ────────────────────────────────────────────────────────────
+# ── 事件，以及幕僚长该怎么反应 ────────────────────────────────────────────────────────────
 #   SCAN-READY     开始盯了：盯着哪些 agent、几个打开的 PR、main 在哪。核对名单是不是你以为的那些。
 #   HEARTBEAT      定时轻看一眼（默认每 5 分钟轻看，事件来了再全查；用户定的节奏）。行里带当前状态
 #                  一览；没有别的事件就不必做什么，有异常（某个 working 很久不动之类）再去读那个 pane。
@@ -47,10 +47,10 @@
 #                  第一次出现时报一行；PROBE-OK 表示它恢复了。没恢复之前，这一项的「没事件」不是「没变化」。
 #
 # ── 为什么这样 ───────────────────────────────────────────────────────────────────────────────────
-# 来历见 dispatch/HISTORY.md #35。
+# 来历见 chief-of-staff/HISTORY.md #35。
 # · 状态防抖：herdr 的 agent_status 是刮屏得来的、会抖（herdr-agents §3 陷阱 ③）。新状态要连续两轮一致才报；
 #   权限框是要人动手的，不防抖。
-# · 心跳：Monitor 没事件就不会叫醒 coordinator，「没事件」和「脚本挂了」分不出来；心跳把两者分开，也给轻看定了节奏。
+# · 心跳：Monitor 没事件就不会叫醒幕僚长，「没事件」和「脚本挂了」分不出来；心跳把两者分开，也给轻看定了节奏。
 # · 撞号只把 herdr agent 所在的、属于 REPO 的 worktree 交给 scan-collisions.sh，不扫本机所有 worktree。
 # · 仓库路径、目录都从环境变量来，不写死某个仓库；main 前进单独成事件。
 # 文件放在技能仓库里，不放会话临时目录（重启会清掉 /tmp）。
@@ -105,7 +105,7 @@ for a in json.load(sys.stdin)["result"]["agents"]:
     for row in "${rows[@]}"; do
       IFS=$'\t' read -r name status pane cwd <<<"$row"
       seen[$name]=1
-      # 属于 REPO 的 linked worktree 交给撞号扫描（主 checkout 本身不算：那是 coordinator 自己站的地方）
+      # 属于 REPO 的 linked worktree 交给撞号扫描（主 checkout 本身不算：那是幕僚长自己站的地方）
       if [ -n "$cwd" ] && top=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null) && [ "$top" != "$REPO" ] \
          && [ "$(git -C "$cwd" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" = "$repo_common" ]; then
         worktrees+=(--worktree "$top")

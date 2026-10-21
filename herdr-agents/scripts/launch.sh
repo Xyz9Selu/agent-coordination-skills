@@ -6,7 +6,7 @@
 # usage: REPO=<仓库主 checkout> [MODEL=sonnet] [BASE=origin/main] [DRY_RUN=1] launch.sh <branch> <label> <agent-name> <prompt-file> <token>
 #   token = 指令里一段独有的字符串（例如 [WORKER-1278-KICKOFF]），用来在 transcript 里数送达次数（count-delivered.sh）。
 #   BASE  = 新分支的基点，`<remote>/<branch>` 形式，脚本先 fetch 它。默认 origin/main；用哪个基点是调用方的事
-#           （dispatch 的规矩写在它自己的「发牌序列」里）。
+#           （chief-of-staff 的规矩写在它自己的「发牌序列」里）。
 #   DRY_RUN=1 只打印将执行的命令和解析出的路径，不建、不起、不发。
 #   最后一行：<name> ws=… pane=… wt=… delivered=<次数>。delivered 不是 1 就照 SKILL.md §2 处理（0 = 没送达，
 #   ≥2 = 重复送达）。只支持 claude kind（数送达读的是 Claude Code 的 transcript）。

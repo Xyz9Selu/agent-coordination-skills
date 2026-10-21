@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # check-env.sh —— 把本机 herdr 与各 agent CLI 的版本，和 herdr-agents 技能里标注的实测版本对一遍；
-# 再看五份技能（herdr-agents / github-backlog / dispatch / todo-recorder / todo-executor）在两处用户级目录里各在不在：
+# 再看五份技能（herdr-agents / github-backlog / chief-of-staff / todo-recorder / todo-executor）在两处用户级目录里各在不在：
 #   ~/.agents/skills/<名>          Claude Code（经 ~/.claude/skills）、OpenCode 从这里找
 #   ~/.gemini/config/skills/<名>   agy 从这里找（它不扫 ~/.agents/skills/，见 SKILL.md §8）
 #
@@ -65,7 +65,7 @@ if command -v opencode >/dev/null 2>&1; then report opencode "$TESTED_OPENCODE" 
 echo
 echo "技能安装位置（SKILL.md §8：用户级要链两处）："
 for d in "$HOME/.agents/skills" "$HOME/.gemini/config/skills"; do
-  for n in herdr-agents github-backlog dispatch todo-recorder todo-executor; do
+  for n in herdr-agents github-backlog chief-of-staff todo-recorder todo-executor; do
     if [ -f "$d/$n/SKILL.md" ]; then
       echo "✅ $d/$n"
     else

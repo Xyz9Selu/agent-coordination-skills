@@ -134,7 +134,7 @@ herdr agent list   # 看有没有别的 pane 在跑幕僚长
 **开工前先把自己的 pane 标出来：**
 
 ```bash
-herdr pane rename <你自己的 pane_id> "⚙ CHIEF OF STAFF — 勿占用"
+herdr pane rename <你自己的 pane_id> "⚙ <名字> - CoS of <项目简称> — 勿占用"
 ```
 
 为什么必须做：没标记的幕僚长 pane 看起来跟普通 pane 一样，会被用户顺手换成别的任务，巡检就停了。**这个标记
@@ -143,18 +143,19 @@ herdr pane rename <你自己的 pane_id> "⚙ CHIEF OF STAFF — 勿占用"
 **接着把自己的 session 也改名：**
 
 ```bash
-herdr pane send-text "$HERDR_PANE_ID" "/rename chief-of-staff-<仓库目录名>"
+herdr pane send-text "$HERDR_PANE_ID" "/rename <名字> - CoS of <项目简称>"
 herdr pane send-keys "$HERDR_PANE_ID" Enter
 ```
 
 （`/rename` 是内置命令，模型自己调不了，只能经 herdr 往自己的输入框里打；这样打有效、忙时也立刻生效，是
 `herdr-agents` §2「斜杠命令这样打是有效的」的实测。）
 
-然后用 harness 的 peer 列表核一下（Claude Code 是 `ListAgents`），首行要读到 `This session is
-chief-of-staff-<仓库目录名>`。没读到就是没改成，在报告里说一句，不要当已改。
+然后用 harness 的 peer 列表核一下（Claude Code 是 `ListAgents`），首行要读到 `This session is <名字> - CoS of
+<项目简称>`。没读到就是没改成，在报告里说一句，不要当已改。
 
-改名是用户定的（见 HISTORY #4）。名字全小写加连字符，因为它也是别的 session 用 `SendMessage` 联系你的地址；带仓库名，
-是为了几个仓库各跑一个幕僚长时分得开。
+名字的格式是用户定的：一个普通的、偏女性化的英文名，加「 - CoS of <项目简称>」（例如 `Claire - CoS of SMOPS`）。
+同一个项目沿用用户记忆里已有的名字，不要每个会话重起；项目还没有名字时，自己起一个、告诉用户。带空格和大小写
+都能当 `SendMessage` 的地址（实测可用）。曾是全小写加连字符的 `chief-of-staff-<仓库目录名>`，已改，见 HISTORY #4。
 
 要在开工第一步做：那时输入框是空的，不会接上用户打了一半的字（`herdr-agents` §2「别往有人在打字的输入框里发」）。
 **什么观测会推翻本节**：`herdr-agents` §2 那条实测被推翻（改名不生效或进了排队）；Claude Code 提供了模型能直接

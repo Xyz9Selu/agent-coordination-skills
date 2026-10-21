@@ -11,9 +11,6 @@
 #   最后一行：<name> ws=… pane=… wt=… delivered=<次数>。delivered 不是 1 就照 SKILL.md §2 处理（0 = 没送达，
 #   ≥2 = 重复送达）。只支持 claude kind（数送达读的是 Claude Code 的 transcript）。
 #
-# 来历：一个 coordinator 2026-10 写在会话临时目录里、写死了某个仓库的启动脚本，2026-10-21 搬进 dispatch 并参数化，
-# 同日按「herdr 层的东西归 herdr-agents」挪到这里。
-#
 # 就绪判据与信任框：见 SKILL.md §1「claude kind」（特征串 `Claude Code v`；信任框默认选中「No, exit」，
 # 读 ❯ 那一行，不在「Yes」上就按 down，在了才按 Enter）。框的文案或顺序变了，就绪循环会跑满 60 次、报
 # NOT READY，不会误按。

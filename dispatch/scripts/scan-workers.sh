@@ -55,7 +55,7 @@
 # · 撞号：旧版扫本机所有 worktree，别的会话留下的 `worktree-agent-*` 刷满 COLLISION-SCAN，只好在外面套 grep -v；
 #   而且一次 34 秒。现在只把 herdr agent 所在的、属于 REPO 的 worktree 交给新的 scan-collisions.sh（≈1 秒）。
 # · 仓库路径、目录都从环境变量来，不再写死某个仓库；main 前进单独成事件。
-# 文件放在技能仓库里（不放会话临时目录）：2026-10-05 一次重启清掉了 /tmp，带走了第一份。
+# 文件放在技能仓库里，不放会话临时目录（重启会清掉 /tmp，第一份就是这么丢的）。
 
 set -u
 : "${REPO:?REPO=仓库主 checkout 的路径}"

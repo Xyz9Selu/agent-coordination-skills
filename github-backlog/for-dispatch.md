@@ -39,7 +39,7 @@ PR 状态）。输出与 `dispatch` 的四个读数一一对应：
 | `probably dead` | 占了但大概死了 |
 
 - 旧格式的 claim（单行式，没有 `sock:` 字段）一律读成 `UNKNOWN` —— 这是设计如此，不是故障（2026-08-25 盘面上两件活
-  皆如此）。随着各 session 用新格式重新占住，这一条会自然消退。dispatch 的 `patrol.md` 原先也写了一份，现只留这里。
+  皆如此）。随着各 session 用新格式重新占住，这一条会自然消退。
 - agy 起的 worker 写的是 `sock: none`，`--check` 对它恒报 `UNKNOWN`；活性按 `herdr-agents` 技能 §6 用进程判断。
 - `UNKNOWN` 时唯一权威是 `SKILL.md` §5 的「2 天无提交」规则，`--check` 会连同分支状态一起打印。
 - 刚被 `claude --resume` 重启过的 worker，`sock:` 指向旧 pid，`--check` 会报 `probably dead` 或 `HOLDER ALIVE`——
@@ -48,7 +48,7 @@ PR 状态）。输出与 `dispatch` 的四个读数一一对应：
 ## Q3 怎么交差
 
 - **交付物是 PR。** 「未完成的交付物」= draft PR；转正 = `gh pr ready`。按 `SKILL.md`「Pull Requests Link Their
-  Issues」写 `Closes #N`（只在 maintainer 验收之后才算关闭信号）。
+  Issues」开 PR 时就写 `Closes #N`：合并时自动关 Issue，合并就是验收。
 - **grill 的结论写回 Issue 评论，不重写正文**（被 grill 过的 Issue 正文是旧的、评论是新的，这是有意的）。
 - **验收 = PR 合并。** 合并后 Issue 改 `Done`，不另等 maintainer（`SKILL.md`「Merged PR = accepted」）；命令是
   `close-merged.sh <PR> <Issue>`，dispatch 的 `closeout.sh` 第一步就是它。
@@ -70,9 +70,6 @@ PR 状态）。输出与 `dispatch` 的四个读数一一对应：
 - 分支 → Issue / PR：`gh pr list --head <分支名>`；分支名里带的号只是约定，**以 claim 评论为准**。
 - claim 评论里的分支名必须与实际分支一致、开了 PR 不改名——规则和理由在 `SKILL.md`「The branch in the claim is the
   branch you work on」。分支怎么起名归 dispatch（它的「命名与标记」）。
-- **被推翻的旧说法**：这里原先写「grill 转实施沿用 `grill/<议题>` 分支时尤其要对上」。那是 2026-08-26 grill 和实施
-  合并到同一条分支时的权宜（分支已经叫 `grill/…`，改名代价高，于是接受现状）；2026-10-13 起 dispatch 从开 grill
-  那一刻就用不带阶段的 `issue/<N>-<短名>`，`grill/` 分支不再出现，这句举例就成了第二套、过时的命名说法。
 
 ## QA 核查标记：PR 标签
 

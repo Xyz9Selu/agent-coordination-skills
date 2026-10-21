@@ -2,7 +2,7 @@
 
 # Agent coordination skills
 
-五个给「一个主 agent 指挥多个 coding agent 并行干活」用的技能。每条规则都带着当时怎么测出来的、以及什么观测会推翻它。
+五个给「一个主 agent 指挥多个 coding agent 并行干活」用的技能。凡是关于工具或环境行为的说法，都带着当时怎么测出来的、以及什么观测会推翻它；用户做的决定就写成决定。
 
 | 技能 | 管什么 | 依赖 | 能单独用吗 |
 |---|---|---|---|
@@ -55,10 +55,6 @@ done
 | Claude Code | `~/.claude/skills/` | 让 `~/.claude/skills` 指向 `~/.agents/skills`，或在其下再建软链 |
 | OpenCode 1.18.32 | `~/.agents/skills/` 与 `~/.claude/skills/` 都扫 | `opencode debug skill` 可查 |
 | agy 1.2.12 | `~/.gemini/config/skills/`（软链也行）；**不扫 `~/.agents/skills/`** | 在空目录里让 agy 列一次技能可复核 |
-
-agy 那一行的观测：探针技能放在 `~/.gemini/config/skills/<名>/SKILL.md`，在空目录里让 agy 列技能（明确要求不调用工具），
-列表里出现；换成指向别处的软链，照样出现；同一个探针放在 `~/.agents/skills/` 则不出现。**推翻条件**：agy 改了全局技能
-目录，或开始扫 `~/.agents/skills/`——那时只链 `~/.agents/skills/` 一处就够。
 
 Claude Code、OpenCode 对 `~/.agents/skills/<名> -> <别处>` 这种软链形状没测过。装完跑一次 `check-env.sh`，再用上表的方法
 各看一眼。

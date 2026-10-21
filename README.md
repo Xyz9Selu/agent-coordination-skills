@@ -3,7 +3,8 @@
 # Agent coordination skills
 
 Five skills for running **one coordinating agent that directs several coding agents working in parallel**.
-Every rule records how it was measured and which observation would overturn it.
+Every claim about how a tool or environment behaves records how it was measured and which observation would
+overturn it. Decisions the user made are stated as decisions.
 
 | Skill | What it covers | Depends on | Standalone? |
 |---|---|---|---|
@@ -68,11 +69,6 @@ what would overturn it are in `herdr-agents` §8):
 | Claude Code | `~/.claude/skills/` | Point `~/.claude/skills` at `~/.agents/skills`, or add symlinks under it |
 | OpenCode 1.18.32 | scans both `~/.agents/skills/` and `~/.claude/skills/` | `opencode debug skill` shows what it found |
 | agy 1.2.12 | `~/.gemini/config/skills/` (symlinks work); **does not scan `~/.agents/skills/`** | Ask agy to list its skills once in an empty directory to double-check |
-
-The observation behind the agy row: a probe skill placed at `~/.gemini/config/skills/<name>/SKILL.md` showed up when
-agy was asked (with tools explicitly forbidden) to list its skills in an empty directory; replacing it with a symlink to
-elsewhere still showed up; the same probe in `~/.agents/skills/` did not. **What would overturn it**: agy changes its
-global skills directory or starts scanning `~/.agents/skills/` — then linking `~/.agents/skills/` alone is enough.
 
 Claude Code and OpenCode have not been tested with the `~/.agents/skills/<name> -> <elsewhere>` symlink shape. After
 installing, run `check-env.sh` once and check each harness using the table above.

@@ -96,7 +96,7 @@ close-merged.sh --check <pr>          # verify only
 
 **This is not the same thing as an Issue being closed.** A development link or a `Closes #N` keyword can close an Issue without any PR having merged — a PR linked through the sidebar, a closing keyword on a PR that was itself closed unmerged, a manual close. Those are what *"`CLOSED` is not done"* (in [`for-dispatch.md`](for-dispatch.md) Q3) warns about, and they are still not acceptance. The trigger for `Done` is the merge, read from the PR, never the Issue's open/closed state.
 
-*Decided 2026-10-21 by the maintainer of the repository this skill was written for ("PR 合并了，算验收" — a merged PR counts as accepted).* **The earlier wording, kept so nobody restores it by accident:** "`Done` — set only after the maintainer's acceptance; accepted PRs merge and close their Issues", and in Write Boundaries, "Set `Done` (requires the maintainer's acceptance first) — Direct request after preflight". That treated acceptance as a separate step after merge, so a merged Issue had no defined moment at which it became `Done` — while the coordinator's cleanup script was already setting `Done` on every merge, contradicting this page. The maintainer resolved it for the merge: the merge already was the acceptance. **What would overturn this:** a repository where merging is not the maintainer's decision (for example, auto-merge on green checks, or merges by someone other than the acceptor) — there, acceptance needs its own signal again.
+*The maintainer's decision (2026-10-21). This page used to treat acceptance as a separate step after the merge, which left a merged Issue with no defined moment to become `Done`.* It assumes merging is the acceptor's own decision; where it is not (auto-merge on green checks, merges by someone else), acceptance needs its own signal.
 
 Link Issues to documents; do not advance Markdown from an Issue or PR.
 
@@ -193,7 +193,7 @@ claim: <branch> · <UTC ISO8601>
 - Claim from the branch you will implement on. If you must switch branches, post a fresh `claim:` naming the new one — the latest unreleased claim is the one peers read.
 - **Do not rename a branch once its PR is open.** GitHub follows the rename on the PR, but nothing else does: other sessions' local worktrees and every `claim:` comment still carry the old name, and a claim naming a branch that no longer exists reads as stale (step 5) — someone will reclaim live work.
 
-(How branches are *named* is not this skill's business — the `dispatch` skill fixes the naming when it launches workers. Before 2026-10-21 the mapping page carried a naming example of its own, `grill/<topic>`, which dispatch had already dropped; see [`for-dispatch.md`](for-dispatch.md) Q4.)
+(How branches are *named* is not this skill's business — the `dispatch` skill fixes the naming when it launches workers.)
 
 `worktree:` takes either form — the script emits it relative to the repo root, the fallback below emits it absolute. Both resolve; what matters is that it names a directory that exists.
 
@@ -374,7 +374,7 @@ Both open exceptions are excluded from the selection query (see [Selecting Work]
 
 When creating a PR that implements an Issue, add `Closes #N` (or `Fixes #N` for bugs) in the PR body referencing the Issue it implements. This makes the Issue auto-close on merge.
 
-- `Closes #N` is valid only after the maintainer's pre-merge acceptance; until then the PR is a draft-style link, not a close signal.
+- Write it from the start. The merge is the acceptance (see [Merged PR = accepted](#merged-pr--accepted)), so the close it triggers is the right one. This used to say `Closes #N` was valid only after a separate pre-merge acceptance; with merge = acceptance, that step no longer exists.
 - One PR implements at most one atomic Issue. A parent Issue (batch) is closed when its last sub-Issue merges; the PR closes the sub-Issue, not the parent.
 
 ## Write Boundaries
@@ -436,6 +436,6 @@ The `dispatch` skill's rules do not know GitHub (two of its scripts do: its `clo
 - Dropping the `-label:deferred -label:blocked` clauses when re-typing the selection query from memory. Neither of those Issues has an assignee, so without the clauses they sail through `no:assignee` and read as the freest work on the board.
 - Making the proposed fix the title. When a later decision forbids that fix, the Issue becomes unimplementable *and* unclosable — the pain is still real, so `wontfix` is wrong too. Title the pain; keep approaches in their own section.
 - Closing a solution-titled Issue because its solution is now forbidden. Rewrite it to the pain instead; closing it deletes the only record that the problem exists.
-- `Closes #123` is valid only after the maintainer's pre-merge acceptance.
+- Leaving `Closes #N` out of the PR until some separate acceptance. The merge is the acceptance; write it when you open the PR.
 - Status is a label on the Issue, not a Project field. One status label per Issue.
 - Setting `Done` on an Issue whose PR has not merged — or because the Issue reads `CLOSED`. The trigger is the merge, read from the PR (`close-merged.sh`).

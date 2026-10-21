@@ -52,8 +52,8 @@ agy 的模型名：`gemini-3.8-flash-high` 是写下时（2026-09-17/18）最新
 
 官方技能写了名字必须匹配 `[a-z][a-z0-9_-]{0,31}`。补两条实测：
 
-- 违反时 `agent start` 返回 `invalid_agent_name`（这是工具直接吐出来的硬约束，不是观测）。`WORKER-476` 这种写法会被拒——曾经有一版说明只写了
-  「只用连字符、不带空格」，不完整。
+- 违反时 `agent start` 返回 `invalid_agent_name`（这是工具直接吐出来的硬约束，不是观测）。`WORKER-476` 这种写法会被拒：
+  大写也不行，不只是空格。
 - `herdr worktree create --label` 与 `herdr tab rename` 的标签**可以**带空格、`#`、`·`、中文（2026-08-25
   实测通过）。所以**标签给人看、agent 名给命令用**。
 - **`herdr agent rename <pane_id> <名字>` 可用**（2026-08-26 实测）。在 herdr 之外直接起的 agy 在
@@ -209,8 +209,7 @@ scripts/count-delivered.sh <worktree 路径 | transcript.jsonl> '<prompt 里一�
 记录，技能正文会作为一条 `isMeta: true` 的 `user` 记录进对话，参数在里面再出现一次。**何时、怎么测的**：
 2026-10-21，在本机最近约 400 份 transcript 里找「命令行参数原样出现在某条 isMeta 记录里」的，找到 4 份。
 **推翻条件**：Claude Code 改了斜杠命令展开的记法。**被推翻的旧写法**：这里原先贴的计数代码没排除 `isMeta`，
-对斜杠命令起头的指令会数成 2，读成「重复送达」；dispatch 当时的 `launch.sh` 排除了——两份并存、各说各的，
-现在只留脚本这一份。
+对斜杠命令起头的指令会数成 2，读成「重复送达」。
 
 **对方正忙时发的指令不记成 `user`**：先记一条 `queue-operation`（`operation: enqueue`），被取出时再记一条
 `remove`，真正进入对话的是一条 `type: attachment`、`attachment.type: queued_command`（文本在 `attachment.prompt`），
@@ -449,8 +448,6 @@ mtime 静止是因为它提交了（工作区变干净）；一份纯文档任�
   `git -C <worktree> log --oneline origin/main..HEAD` 查提交，交付物用你所用工作流的查法；不要信
   `agent_status`：herdr 把「做完退场」和「卡死」都报成 `idle`。
 
-（原先这里有一段「给巡检脚本作者的提醒」，那是写巡检脚本的人的事，已挪到 dispatch 的 `patrol.md`。）
-
 ### 被 `claude --resume` 重启过：四个信号全正常，但事情没在推进
 
 2026-08-27 06:18，一批任务的 claude 进程被 `claude --resume <sid>` 重新拉起。同一个 session id 续写
@@ -505,8 +502,7 @@ for p in $(pgrep -x agy); do printf '%s\t%s\n' "$p" "$(readlink /proc/$p/cwd)"; 
 为什么正常收工不直接 kill：`/exit` 让 Claude Code 自己退出、收好 transcript，退出之后它从 `herdr agent list`
 消失，这本身就是「进程停了」的判据，不用去找 pid。为什么急停不用 `/exit`：它是一条普通 prompt，对方正忙时会
 **排队**到这一轮跑完（陷阱 ②），打断不了任何东西。
-**`/exit` 这条路径的出处**：2026-10-21 dispatch 的收尾脚本先采用了「`/exit` → 等离开列表 → 删 worktree → 关
-workspace」；同日（Claude Code 2.1.306 + herdr 0.9.5）在一个一次性仓库的新 worktree 上跑了一遍 `launch.sh` →
+**`/exit` 这条路径怎么测的**：2026-10-21（Claude Code 2.1.306 + herdr 0.9.5）在一个一次性仓库的新 worktree 上跑了一遍 `launch.sh` →
 `deliver-when-idle.sh` → `retire.sh exit` → `retire.sh remove`：空闲的 agent 收到 `/exit` 后约 3 秒离开列表，
 worktree 删掉，workspace 关掉，列表里不再有它。只测了空闲时这一次。**推翻条件**：`/exit` 之后 agent 留在列表里
 （`retire.sh exit` 会报 ⚠）；或 herdr 改成 agent 退出后仍保留在列表里。
@@ -521,9 +517,6 @@ worktree 删掉，workspace 关掉，列表里不再有它。只测了空闲时�
 过。第 4 个就留成了空壳，要显式 `workspace close` 才没了。
 
 **完成判据**：收工后跑一次 `herdr workspace list`，还看得见那个标签就是没关干净。
-
-（这一条本身就是「当一个解释让你当下的叙事变得完整时，那正是最该去核的时刻」的又一个实例——区别只是
-这次的来源是我自己，不是同伴。）
 
 ## 8 · 各 harness 从哪里发现技能
 

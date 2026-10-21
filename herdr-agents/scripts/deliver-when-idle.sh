@@ -5,10 +5,6 @@
 #   每 15 秒看一遍，最多 1 小时（240 轮）。每个 agent 发出后打印一行 delivered rc=…；最后一行 remaining: 列出没发出去的。
 #   rc=0 只说明 `agent prompt --wait` 看到了 working，**不等于送达**——送达照 SKILL.md §2 回读确认。
 #   「输入框是空的」怎么判、为什么要判，见 SKILL.md §2「别往有人在打字的输入框里发」。
-#
-# 来历：一个 coordinator 2026-10 写在会话临时目录里的脚本，与仓库无关，2026-10-21 搬进 dispatch，只改了三处：
-# agent 名走 argv（不再拼进 python 源码）；每轮只调一次 `herdr agent list`；列表读失败时重试。同日按「herdr 层的
-# 东西归 herdr-agents」挪到这里。
 
 msg=$1; shift; pending="$*"
 for i in $(seq 1 240); do

@@ -87,6 +87,33 @@ herdr pane rename <你自己的 pane_id> "⚙ COORDINATOR — 勿占用"
 看起来跟普通 pane 一样，没有任何东西说「这里正在协调，别占」。它一走，巡检就停了，而且没有任何东西提醒
 用户。**这个标记就是唯一的提醒。**
 
+**接着把自己的 session 也改名：**
+
+```bash
+herdr pane send-text "$HERDR_PANE_ID" "/rename coordinator-<仓库目录名>"
+herdr pane send-keys "$HERDR_PANE_ID" Enter
+```
+
+然后用 harness 的 peer 列表核一下（Claude Code 是 `ListAgents`），首行要读到 `This session is
+coordinator-<仓库目录名>`。没读到就是没改成，在报告里说一句，不要当已改。
+
+为什么：pane 标签只在 herdr 里看得见。用户在 Claude Code 的会话列表、`/resume` 列表里，或者别的 session
+在 peer 列表里找 coordinator 时，看到的是 session 名，而这个名字是 harness 生成的（例如
+`clear-conversation`），看不出这个会话在协调。用户 2026-10-21 要求加上这一步。名字用全小写加连字符，
+因为它也是别的 session 用 `SendMessage` 联系你时用的地址；加上仓库名，是为了几个仓库各跑一个
+coordinator 时能分开。
+
+为什么不直接调用 `/rename`：它是内置命令，模型没法自己调，只能经 herdr 往自己的输入框里打，效果等于
+人敲。**何时、怎么测出来的**：2026-10-21，Claude Code 2.1.306 + herdr 0.9.5。先在一个一次性 session 上测：
+空闲时发 `/rename`，立刻显示 `Session renamed to: …`，peer 列表马上变了；正在跑工具（`sleep 25`）时发，
+也是立刻生效，没有打断那一轮。再在 coordinator 自己这一轮的工具调用里对自己的 pane 发，同样生效，
+`ListAgents` 首行变成了新名字。
+**已知风险**：用户如果正好在 coordinator 的输入框里打了一半字，`send-text` 会接在后面一起提交
+（`herdr-agents` 的已知行为）。所以要在开工第一步做，那时用户刚敲完 `/dispatch`，输入框是空的。
+**什么观测会推翻本节**：发出去之后画面上没有 `Session renamed to`，或者 peer 列表里名字不变；session
+正忙时发，命令进了排队、等这一轮结束才执行；Claude Code 提供了模型能直接调用的改名方式（那时改用它，
+不再经 herdr 往输入框里打）。
+
 **起 worker / grill agent 时，三个层次的名字要一致且一眼可辨：**
 
 | 层 | 命令 | worker | grill agent |
@@ -106,8 +133,11 @@ herdr pane rename <你自己的 pane_id> "⚙ COORDINATOR — 勿占用"
   见 `herdr-agents` §1「名字」。所以标签给人看、agent 名给命令用。
 - **大写的 `WORKER` / `GRILL` / `COORDINATOR` 前缀是为了扫一眼就分得清类型**。三类 agent 干的事、能碰的
   东西、该被怎么对待完全不同，混在一列没有前缀的名字里认不出来。
-- **session 层的名字你控制不了** —— 那是 harness 自己生成的（如 `fix-224-fx-missing-rate-gate-4c`），跟你
-  起的 herdr 名不一样。所以报位置时**两个名字都要报**，否则用户按其中一个找不到另一个。
+- **worker / grill 的 session 名不改，用 harness 生成的那个**（如 `fix-224-fx-missing-rate-gate-4c`），
+  它跟你起的 herdr 名不一样。所以报位置时**两个名字都要报**，否则用户按其中一个找不到另一个。
+  原文写的是「session 层的名字你控制不了」。2026-10-21 测出来能控制：用上面 coordinator 那一步的 `/rename`
+  就行。原文那句是在没想到经 herdr 往输入框里打 `/rename` 时写的。现在不给 worker 改名，是因为用户只要求
+  改 coordinator，而且 harness 生成的名字里本来就带分支名，够认了。要给 worker 也改，先问用户。
 
 ## 为什么存在
 
@@ -351,7 +381,7 @@ worker 起在**它自己的 herdr workspace** 里。用户待在原来那个 wor
        分支 fix/224-fx-missing-rate-gate
 ```
 
-**两个名字都要报** —— herdr 名是你起的，session 名是 harness 自己生成的、你控制不了（见「命名与标记」）。
+**两个名字都要报** —— herdr 名是你起的，worker 的 session 名是 harness 自己生成的，我们不改它（见「命名与标记」）。
 只报一个，用户按它找不到另一个。
 
 并说明**它不会出现在 Claude Code 的 agent 面板里**：那个面板列的是当前 session 自己的 subagent 和后台

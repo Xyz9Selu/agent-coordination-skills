@@ -119,8 +119,15 @@ done
 - 判据串是 `Antigravity CLI [0-9]`，**不是** `Antigravity CLI`：信任对话框里有一句「Antigravity CLI
   requires permission…」，不带版本号的串会在对话框阶段就误判 banner 到了。banner 是
   「Antigravity CLI 1.2.12」这种带版本号的写法。
-- 其它 kind 的 banner 特征字串不同，**自己回读一眼定**。claude kind 在新目录里有没有类似的信任
-  对话框、`--lines 20` 读不读得到它，**没测过**。
+- 其它 kind 的 banner 特征字串不同，**自己回读一眼定**。
+- **claude kind 在没信任过的目录里也有信任对话框，而且默认选中的是「No, exit」**：直接按 Enter 会让会话
+  退出，后面发的 prompt 打进裸 shell。要先按 Down 选到「Yes, I trust this folder」再 Enter（`dispatch/scripts/
+  launch.sh` 已经这么做：按 Down 直到选中行是 Yes）。框出现时 `agent start` 返回 `agent_not_ready`。
+  **何时、怎么测的**：2026-10-21，Claude Code 2.1.306 + herdr 0.9.5，三次：一个 job 临时目录、一个
+  `~/.cache` 下的新目录、一个从没用过的仓库（agent-coordination-skills）的新 herdr worktree，都弹了；
+  smart-manu-ops 的 herdr worktree 没弹（那个仓库信任过）。第一次照 agy 的写法直接按 Enter，会话退出了。
+  **推翻条件**：Claude Code 改了默认选项，或新目录不再弹框。
+  原文这里写的是「claude kind 在新目录里有没有类似的信任对话框，**没测过**」——当时确实没测，现在测了。
 
 **完成判据：** 循环是因为匹配到 banner 特征串而 `break` 的，不是因为跑满 60 次。跑满了就是没就绪，
 先 `pane read --source visible` 看画面停在哪，别发。
@@ -182,8 +189,18 @@ for line in open('<transcript.jsonl>',encoding='utf-8'):
         c=d.get('message',{}).get('content')
         t=c if isinstance(c,str) else ' '.join(x.get('text','') for x in c if isinstance(x,dict))
         if '<prompt 里一句独特的话>' in t: n+=1
+    elif d.get('type')=='attachment' and d.get('attachment',{}).get('type')=='queued_command':
+        if '<prompt 里一句独特的话>' in str(d['attachment'].get('prompt','')): n+=1
 print(n)"
 ```
+
+**对方正忙时发的指令不记成 `user`**：先记一条 `queue-operation`（`operation: enqueue`），被取出时再记一条
+`remove`，真正进入对话的是一条 `type: attachment`、`attachment.type: queued_command`（文本在 `attachment.prompt`），
+整个过程**没有 `user` 记录**。所以上面连 `queued_command` 一起数；`queue-operation` 那两条不要数，否则一次投递
+会数成两三次。对方空闲时发的才记成 `user`。
+**何时、怎么测的**：2026-10-21，Claude Code 2.1.306，同一个 worker 的 transcript：忙时排队的那条只有 `enqueue` /
+`remove` / `queued_command` 各一条、`user` 为 0；空闲时发的几条各有一条 `user`。原来只数 `user`，对排队的那条读出
+0，是假阴性。**推翻条件**：Claude Code 改了排队消息的记法。
 
 `<worktree-slug>` = worktree 绝对路径把 `/` 换成 `-`，**`.` 也变 `-`**（`/home/<user>/.herdr/...` →
 `-home-<user>--herdr-...`），少算一个横线会得到「0 个 transcript」的假读数。（这是 claude kind 的

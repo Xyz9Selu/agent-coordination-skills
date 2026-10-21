@@ -378,9 +378,12 @@ claude kind 的 ①–③ 已经串成 `scripts/launch.sh`（`REPO=<仓库> [MOD
 
 ```bash
 # ① 建隔离工作区（连带建好 workspace + tab + 已 cd 的 pane）
-herdr worktree create --cwd <repo根> --branch <分支名> --base main \
+herdr worktree create --cwd <repo根> --branch <分支名> --base origin/main \
   --label "WORKER #<N> · <短名>"                      # 命名见「命名与标记」
 #    → 从返回 JSON 取 result.root_pane.pane_id 与 result.tab.tab_id
+#    --base 一律 origin/main（先 git fetch）。原文写的是 --base main：本地 main 曾落后 origin 298 个提交，
+#    主 checkout 也常停在别的分支上；2026-10-12 John 定「以后从 origin/main 拉，合并到 main」。
+#    dispatch/scripts/launch.sh 已按此实现。
 
 # ①a 给 tab 也贴同一个标签，用户扫一眼就知道这是谁
 herdr tab rename <tab_id> "WORKER #<N> · <短名>"

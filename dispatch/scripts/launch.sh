@@ -51,6 +51,10 @@ for line in open(sys.argv[1],encoding='utf-8'):
         c=d.get('message',{}).get('content')
         t=c if isinstance(c,str) else ' '.join(x.get('text','') for x in c if isinstance(x,dict))
         if sys.argv[2] in t: n+=1
+    # A prompt sent while the agent is busy lands as a queued_command attachment, never as
+    # a 'user' record (herdr-agents §2). Don't count the queue-operation enqueue/remove pair.
+    elif d.get('type')=='attachment' and d.get('attachment',{}).get('type')=='queued_command':
+        if sys.argv[2] in str(d['attachment'].get('prompt','')): n+=1
 print(n)
 PY
 )

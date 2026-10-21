@@ -13,7 +13,7 @@
 
 ```bash
 # 分支名不带阶段：issue/<N>-<短名>，grill 和实施同一条（见下文「grill 完在原分支继续做」）
-herdr worktree create --cwd <repo根> --branch issue/<N>-<短名> --base main \
+herdr worktree create --cwd <repo根> --branch issue/<N>-<短名> --base origin/main \
   --label "GRILL #<N> · <短名>"                       # 命名见 SKILL.md「命名与标记」
 herdr tab rename <tab_id> "GRILL #<N> · <短名>"
 herdr agent start grill-<N>-<短名> --kind claude --pane <root_pane> --timeout 60000 -- --model opus

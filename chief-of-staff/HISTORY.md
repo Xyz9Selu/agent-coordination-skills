@@ -302,4 +302,4 @@ revision id 与 ADR 编号」，迁移号「按 `revision = '…'` 那一行解�
 「coordinator」一并改成「幕僚长」，pane 标签、`/rename` 名跟着改。不留 `dispatch` 薄壳或别名。本文件里更早的条目
 保留当时的名字（dispatch / coordinator）。交接目录 `~/.local/state/dispatch/<仓库>/` 是本机已有的状态目录，不在这次改名范围内。
 
-补记（#4，2026-10-21 晚）：用户嫌 `chief-of-staff-smart-manu-ops` 太长、没人味，改成「名字 + - CoS of <项目简称>」，名字用普通、偏女性化的英文名；smart-manu-ops 的幕僚长叫 Claire。peer 列表里已有带空格的会话名、实测带空格和大小写的名字照样能当 SendMessage 地址，原先「全小写加连字符」的顾虑不成立。
+补记（#4，2026-10-21 晚）：用户嫌 `chief-of-staff-smart-manu-ops` 太长、没人味，改成「名字 + - CoS of <项目简称>」，名字用普通、偏女性化的英文名；名字每个会话现取（本会话叫 Claire）。peer 列表里已有带空格的会话名、实测带空格和大小写的名字照样能当 SendMessage 地址，原先「全小写加连字符」的顾虑不成立。

@@ -22,16 +22,14 @@ Claude Code 的跨 session 消息会被扣留、超时静默丢弃（`herdr-agen
 报不了。所以 Monitor 没挂上、或你的 harness 挂不了这种常驻脚本时，**每次回复都写一句「现在没有自动巡检，只在
 你说话时我才会去看」**，不许让用户以为有人在看。
 
-**它看不见的东西（2026-10-21 合并时核过脚本，未在 0.9.5 上实跑复测）：**
+**它看不清的东西：**
 
-- `AGENT-STATUS` 来自 herdr 的 `agent_status`。对 agy，接口报错停住（`⚠ Internal error encountered`）在
-  herdr 的屏幕规则里没有对应条目，会一直读作 working，**这种停住不会出事件**——09-28/29 当夜出现过三次，
-  都是读屏幕才发现的。详见 `herdr-agents` §3 陷阱 ③a。心跳里 agy 的状态同理，心跳轻看时对 agy
-  读一眼 `recent` 的底部，不要只看那一列。
+- `AGENT-STATUS` 来自 herdr 的 `agent_status`。agy 接口报错停住（`⚠ Internal error encountered`）读作 `idle`，
+  和「做完在等」是同一个事件（`herdr-agents` §3 陷阱 ③a）。所以 agy 的 working→idle 每次都读 `recent` 的底部，
+  看有没有那行报错。
 - `AGENT-PROMPT` 和事件里附的画面读的是 `--source visible`。pane 被人滚上去过，`visible` 就冻在旧画面上
   （`herdr-agents` §3 陷阱 ④b），新弹出的权限框读不到。
-- 推翻条件：herdr 的 agy 规则能认出接口报错（`herdr agent explain` 对那种屏幕报非 working），删第一条；脚本
-  改读不受滚动影响的来源，删第二条。
+- 推翻条件：herdr 的 agy 规则把接口报错判成 `blocked`，删第一条；脚本改读不受滚动影响的来源，删第二条。
 
 **收到 `AGENT-STATUS` 时怎么掂量**：09-28 15:38 → 09-29 05:31 用上一代看门脚本（一个「有变化就退出」的
 `watch-workers.sh`，已被本脚本取代）跑了一夜，叫醒 39 次，逐条对 transcript 人工归类（个别 ±1）：有用的几乎都

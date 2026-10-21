@@ -290,24 +290,18 @@ Enter」，用户指出那是建议、他根本没打过。**何时、怎么测�
 > `recent-unwrapped` 并给足行数。** 推翻条件：`visible` 在某个 kind 上再次读回空白，而同一时刻
 > `recent-unwrapped` 读得到——记下 `herdr --version` 与 kind。
 >
-> 上面「`visible` = 当前这一屏」**少说了一半**，2026-09-29 补在下面 ④b。「确认启动用 `visible`」仍然
-> 成立，但只在 pane 停在底部时成立。
+> 上面「`visible` = 当前这一屏」**少说了一半**：它是当前滚动位置那一屏，见下面 ④b。「确认启动用
+> `visible`」只在 pane 停在底部时成立。
 
 ### 陷阱 ④b `visible` 跟着 pane 的滚动位置走，滚上去就冻成旧画面
 
-**现象（2026-09-28 17:50 前后，coordinator 驱动 agy worker）：** `visible` 一直显示「输入框里还躺着
-刚发的指令、上面是很早以前的输出」，于是以为没提交，多按了几次 Enter 又重发。同一时刻
-`recent --lines 400` 显示指令早已提交、agent 在干活；`herdr agent explain` 也报 working。
+`visible` 读的是 pane **当前滚动位置**那一屏，不是底部。有人把 pane 往上滚了（滚轮、copy mode）又没滚回去，
+`visible` 就一直返回那个位置的旧内容：新输出进来时 herdr 加大偏移量把那一屏钉在原处，发指令、按 Enter 都不会
+把它拉回底部。agy 把已提交的指令回显成「分隔线 + `> 指令原文`」，冻在这里时和「指令还在输入框里没发」一模一样，
+于是会重发。`recent` / `recent-unwrapped` / `detection`（`agent_status` 用的就是它）都从底部读，不受影响。
 
-**原因：** `visible` 读的是 pane **当前滚动位置**那一屏，不是屏幕底部。有人把 pane 往上滚了（多半是
-人在 herdr 界面里滚了滚轮，也可能是 copy mode）又没滚回底部，`visible` 就返回那个位置的旧内容。新输出
-进来时 herdr 会自动加大偏移量，让那一屏钉在原处——所以它**能一直旧下去**，发指令、按 Enter 都不会把它
-拉回底部。agy 把每条已提交的指令回显成「一条分隔线 + `> 指令原文`」，冻住的画面恰好停在这里时，和
-「指令还在输入框里没发出去」一模一样。`recent` / `recent-unwrapped` / `detection`（`agent_status` 和
-`agent explain` 用的就是它）都从底部读，不受滚动位置影响，这就是为什么它们当时是对的。
-
-**怎么判断：** `herdr pane get <p>` 返回的 `scroll.offset_from_bottom`。`0` = 在底部，此时 `visible` 与
-`recent --lines <viewport_rows>` 内容一致；不为 `0` = `visible` 是旧画面，别信。
+**怎么判断：** `herdr pane get <p>` 的 `scroll.offset_from_bottom`。`0` = 在底部，此时 `visible` 与
+`recent --lines <viewport_rows>` 逐字相同；不为 `0` = `visible` 是旧画面。
 
 ```bash
 off=$(herdr pane get <p> | jq '.result.pane.scroll.offset_from_bottom')
@@ -318,34 +312,11 @@ off=$(herdr pane get <p> | jq '.result.pane.scroll.offset_from_bottom')
 - 判断「送到了没 / 在不在干活 / 停在哪」一律读 `recent`（或 `recent-unwrapped`）并给足行数，不用
   `visible`。巡检也一样。
 - 只有要看「画在屏幕顶部、光标在下方」的东西（信任对话框，陷阱 ①a）才用 `visible`，并且先确认
-  `offset_from_bottom` 为 0。也可以改用 `recent --lines <viewport_rows>`：它不受滚动影响，也能读到
-  对话框，代价是会多带进一两行上一屏的历史（同一 pane 里以前起过 agy 时，理论上可能误匹配旧 banner，
-  没实测撞到过）。
+  `offset_from_bottom` 为 0；或者改用 `recent --lines <viewport_rows>`（不受滚动影响，会多带进一两行上一屏）。
 - 不要替人把 pane 滚回底部：那会改掉人正在看的界面。
 
-**怎么测出来的（2026-09-29，herdr 0.9.1，新开的 workspace 里一个普通 shell pane 和一个 agy 1.2.x）：**
-1. 在底部时连续采样 10 次，`visible` 与 `recent` 的最后一行每次都一样（差一行也只是两次读之间新打出
-   的那一行）——`visible` 本身没有延迟。
-2. 用 socket API 的 `pane.scroll` 把 pane 往上滚 150 行：`visible` 立刻变成 S105–S151 那一段，
-   `recent --lines 3` 仍是最后几行，`detection` 仍是底部。
-3. 滚着不动再打 50 行新输出：`offset_from_bottom` 从 150 自动涨到 201，`visible` 仍是 S105–S151。
-4. 对 agy：滚上去 20 行后发一条新指令，agent 跑完（`agent_status` done），`visible` 连续 24 秒都是上一轮
-   的输出，一行新内容都没有；`recent` 读到了全部新输出。把偏移调到 76 行时，`visible` 底部正好是
-   「上一轮输出 + 分隔线 + `> 指令原文`」——就是 17:50 那次看到的画面。
-5. 滚回 0：`visible` 与 `recent --lines 47`（47 = viewport_rows）逐字相同。
-
-**上游：** 0.9.1 是写下时的最新正式版，之后两个 preview（09-21、09-28）的提交里没有改 `visible` 语义的；
-issue 列表里没有人报过「`visible` 跟随滚动位置」。文档对 `visible` 只写了「Current rendered screen」，
-按字面理解它这样做不算 bug，升级不会让它消失。2026-10-21 核过：0.9.2–0.9.5 的发布说明里也没有改 `visible`
-语义的条目；本机已是 0.9.5，**没在 0.9.5 上复测**。
-
-**什么观测会推翻本条：** `offset_from_bottom` 为 0 时 `visible` 仍然给出比 `recent` 旧的画面（那说明还有
-别的原因）；或者 pane 被滚上去时 `visible` 仍返回底部内容（说明 herdr 改了语义，先核 `herdr --version`）。
-
-**还没拆开的一次观测（2026-09-29 01:10 前后）：** 巡检脚本用 `visible | tail -4` 对 5 个 agy 连续报
-working 超过一小时，改成 `recent --lines 12` 才读对。那次同时把 agy 状态栏右下角的「N task(s)」当成了
-在干活——在底部时 agy 的最后 4 行只有输入框和状态栏，看不出忙不忙，所以更像是「只看 4 行 + 判据错」，
-不一定是 `visible` 冻住了。事后那 5 个 pane 已关，没法再查它们当时的滚动位置。
+实测于 herdr 0.9.5 + agy 1.4.2（2026-10-21；0.9.1 上同样成立），步骤见 [`HISTORY.md`](HISTORY.md) #1。
+**推翻条件**：pane 滚上去时 `visible` 返回底部内容，或 `offset_from_bottom` 为 0 时 `visible` 比 `recent` 旧。
 
 ### 陷阱 ③ `agent_status` 是刮终端画面得来的，会抖
 
@@ -355,30 +326,21 @@ working 超过一小时，改成 `recent --lines 12` 才读对。那次同时把
 
 **对每个活着的 agent 读回滚佐证，不能只信 `agent_status`。**
 
-### 陷阱 ③a agy 的 `agent_status`：接口报错停住仍读作 working
+### 陷阱 ③a agy 接口报错停住读作 `idle`，和「做完在等」分不出
 
-herdr 对 agy 没有生命周期 hook，状态只靠屏幕 manifest（Antigravity CLI 的 integration 只管会话恢复，不管状态）。
-`herdr server agent-manifests` 列出当前生效的是哪个版本、是不是被本地覆盖了。
+herdr 对 agy 没有生命周期 hook，状态只靠屏幕 manifest。agy 遇到 `⚠ Internal error encountered`（或
+`The request contains invalid parameters`）会停住等人叫醒，而 remote manifest `2026.10.05.1` 里没有规则认这行，
+落到默认的 `idle`——不是 `blocked`。所以 agy 的 working→idle（`agent_status`、`agent wait`、
+`pane.agent_status_changed`、dispatch 的 `AGENT-STATUS`）每次都要读 `recent` 的底部，看输入框上方有没有那行报错。
+herdr 0.9.5 + manifest `2026.10.05.1` 下用 `agent explain --file` 测过（历史 #2）。
+**推翻条件**：`herdr agent explain --file <报错屏> --agent agy` 给出 `blocked`，或真实报错屏读成 `working`。
 
-**现行（2026-10-21 读 remote manifest `agy.toml` `2026.10.05.1` 的规则文本得出，herdr 0.9.5，未实跑复测）：**
-里面没有任何一条能认出 `⚠ Internal error encountered`（或 `The request contains invalid parameters`），所以
-接口报错停住的 agy 仍报 working——09-28/29 当夜三次。`agent_status`、`agent wait`、`events.subscribe` 的
-`pane.agent_status_changed`（以及 dispatch 的 `scan-workers.sh`）对这种停住都没反应。判 agy 是不是停住了，读
-`recent` 的底部：有没有 `esc to cancel`、输入框上方有没有那行报错。
-**推翻条件**：manifest 升了版本，且 `herdr agent explain` 对那种屏幕报非 working——那就删掉这一条。
+曾是「接口报错停住读作 working」「后台 shell 在跑就算 working」，已推翻，见历史 #2。
 
-**被推翻的前半条（2026-09-29 写，2026-10-21 改）**：原先这里还写「后台 shell 在跑就算 working」。当时生效的
-manifest `2026.06.24.1` 有一条 `background_tasks_working`：底部出现 `· N task` 就判 working，而那个数字是**后台
-shell 个数**，起着 dev server 就恒大于 0；09-29 08:2x 三个停在输入框等人的 agy（底部 `2 task(s)`）`agent explain`
-全报 working。上游在 herdr **0.9.4**（「Antigravity … count as idle once they are back at their prompt, even if
-their own background tasks … are still running」，#3530）和 manifest `2026.10.05.1`（文件头：「Once the agent
-is back at its prompt they do not count as working」）修掉了。所以这半条只在用旧 herdr、或**本地覆盖文件挡住了
-新 manifest** 时还成立。
-
-**本地覆盖会挡住上游修复**：`~/.config/herdr/agent-detection/agy.toml` 永远优先于 remote。2026-09-29 有人为绕开
-上面那条写过一份；remote 升到 `2026.10.05.1` 后，`herdr server agent-manifests` 对 agy 报 `local override shadows
-cached remote rules`。看到这行就去比两份规则，上游已经覆盖的部分从覆盖文件里删掉（或删掉整个文件，再
-`herdr server reload-agent-manifests`），别让一份旧的变通写法一直压着上游。
+**本地覆盖是整份替换，不是按规则合并。** `~/.config/herdr/agent-detection/agy.toml` 存在时，上游 manifest
+整个不生效：覆盖文件里只放一条规则，agy 的 working、信任框、权限框就全落成 `idle`（历史 #3）。
+`herdr server agent-manifests` 对 agy 报 `local override shadows cached remote rules` 时，去比两份规则。
+**推翻条件**：同一组 `explain --file` 在只含一条规则的覆盖下，其余屏幕仍按上游规则判。
 
 ### `herdr agent list` 只看得见 herdr 自己起的 agent
 

@@ -6,8 +6,7 @@
 # 用法：dispatch/scripts/test-scan-collisions.sh            测同目录下的 scan-collisions.sh
 #       SCAN=<别的脚本> LEGACY=1 test-scan-collisions.sh     测旧版（旧版不收 ref 参数，扫全部远端分支）
 #
-# 2026-10-21 写下时：旧版（只读 revision、从不读 down_revision）在「分叉」「接在过时的 head 上」两个场景
-# 报「无撞号」、在所有撞号场景给的都是「先占者保号」，这里都判失败；新版全过。
+# 旧版在「分叉」「接在过时的 head 上」和「先占者保号」上判失败，见 dispatch/HISTORY.md #29。
 
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -96,7 +96,7 @@ close-merged.sh --check <pr>          # verify only
 
 **This is not the same thing as an Issue being closed.** A development link or a `Closes #N` keyword can close an Issue without any PR having merged — a PR linked through the sidebar, a closing keyword on a PR that was itself closed unmerged, a manual close. Those are what *"`CLOSED` is not done"* (in [`for-dispatch.md`](for-dispatch.md) Q3) warns about, and they are still not acceptance. The trigger for `Done` is the merge, read from the PR, never the Issue's open/closed state.
 
-*The maintainer's decision (2026-10-21). This page used to treat acceptance as a separate step after the merge, which left a merged Issue with no defined moment to become `Done`.* It assumes merging is the acceptor's own decision; where it is not (auto-merge on green checks, merges by someone else), acceptance needs its own signal.
+*The maintainer's decision. Was: acceptance as a separate step after the merge — overturned, see HISTORY #1.* It assumes merging is the acceptor's own decision; where it is not (auto-merge on green checks, merges by someone else), acceptance needs its own signal.
 
 Link Issues to documents; do not advance Markdown from an Issue or PR.
 
@@ -162,9 +162,9 @@ claim-issue.sh --self-test      # check the liveness table on this box
 
 **Read its output.** It refuses to claim an Issue whose holder it can prove is alive, and it prints `⚠ N unreleased claims` when step 3 catches a race. Neither is advisory.
 
-The claim's fields are **fixed**, because a peer has to act on them mechanically, and assembling six coordinates by hand produces a different claim every time — the board this protocol was written on already showed one claim naming a worktree that did not exist and another naming a branch that did not exist. The script is a convenience for that, not a necessity: the fallback further down works, and you should use it when you cannot run the script. What the script buys is `--self-test`, `--check`, uniform output, and no quoting traps around `·`.
+The claim's fields are **fixed**, because a peer has to act on them mechanically, and assembling six coordinates by hand produces a different claim every time (see HISTORY #2). The script is a convenience for that, not a necessity: the fallback further down works, and you should use it when you cannot run the script. What the script buys is `--self-test`, `--check`, uniform output, and no quoting traps around `·`.
 
-Two quirks of a Claude Code worktree-isolated session's Bash are worth knowing before you hand-roll anything, because each one refuses a shape that looks obviously fine (measured 2026-08-25, one shape per call):
+Two quirks of a Claude Code worktree-isolated session's Bash are worth knowing before you hand-roll anything, because each one refuses a shape that looks obviously fine (measured one shape per call, see HISTORY #3; if a refused shape now passes, re-measure and drop its row):
 
 | Command | Result |
 |---|---|
@@ -177,7 +177,7 @@ Two quirks of a Claude Code worktree-isolated session's Bash are worth knowing b
 1. An argument that is *entirely* a command substitution is refused; the same substitution embedded in literal text passes. So **`git` is not a trigger** and substitution is not the problem — a bare `$(...)` argument is.
 2. **`$CLAUDE_*` expansion** is refused even inside literal text (while `$HOME` passes). Reach those values with `$(printenv VAR)` instead, which is a command and so falls under rule 1.
 
-(Five successive explanations of this wall were written down that day and were wrong — see the header comment of `claim-issue.sh`. Only the two above survived measurement. Before writing "cannot" into a doc other agents copy from, try one equivalent form.)
+(Five other explanations of this wall were written down and were wrong — see HISTORY #3. Before writing "cannot" into a doc other agents copy from, try one equivalent form.)
 
 What the script writes, and the contract any hand-written claim must still meet:
 
@@ -201,7 +201,7 @@ claim: <branch> · <UTC ISO8601>
 
 `sock:` is what makes a claim **verifiable**. It names a socket that exists only while that session is alive, so any peer can ask "is the holder still there?" without guessing from timestamps (steps 3 and 5). If your harness does not export a messaging socket — OpenCode, Codex, Cursor, agy, plain CI — write `sock: none` honestly. A claim with `sock: none` is still a valid claim; it just cannot be liveness-checked, so only the commit-age rule in step 5 applies to it. **Never invent a socket path.** A path that resolves to nothing reads as a dead session and invites a reclaim of live work.
 
-**Without the script** — another machine, a fresh clone, a harness that cannot run it — all six fields fit in one plain command, and this runs inside a Claude Code worktree-isolated session (verified 2026-08-25):
+**Without the script** — another machine, a fresh clone, a harness that cannot run it — all six fields fit in one plain command, and this runs inside a Claude Code worktree-isolated session (verified, see HISTORY #3):
 
 ```bash
 echo "claim: $(git branch --show-current) · $(date -u +%Y-%m-%dT%H:%M:%SZ) worktree: $(git rev-parse --show-toplevel) host: $(hostname) sid: $(printenv CLAUDE_CODE_SESSION_ID) pid: $(printenv CLAUDE_PID) sock: $(printenv CLAUDE_CODE_MESSAGING_SOCKET)"
@@ -214,7 +214,7 @@ Pipe it to a file, or paste the output into `gh issue comment <N> --body-file <p
 Rewriting an Issue's body, title, or labels — triage, a count correction, a `deferred` marker — is a **third class of action**, neither selection nor implementation, and the claim rule does not stretch to cover it in either direction:
 
 - Requiring a claim would mean claiming 49 Issues to run one triage sweep. That locks the entire board to do read-mostly work. Not acceptable.
-- Requiring nothing lets two sessions rewrite the same body an hour apart with no coordination. That has already happened: one Issue's body was rewritten by one session, then rewritten again by another after a related PR merged (which also corrected an error in the first rewrite). Neither knew of the other.
+- Requiring nothing lets two sessions rewrite the same body an hour apart with no coordination. That has already happened (see HISTORY #4).
 
 So triage editing needs **no claim**, and instead carries two obligations:
 
@@ -234,7 +234,7 @@ gh issue view <N> --json assignees,comments \
 
 If more than one unreleased `claim:` comment exists, **the earliest timestamp wins**. The loser releases and re-selects. No negotiation, no waiting.
 
-"Unreleased" means **posted after the last `release:` or `reclaim:`** — both end every claim before them (step 5 posts the reclaim before the new claim). Counting every `claim:` in the history instead turns any claim → release → claim into a phantom race; `claim-issue.sh` did exactly that until 2026-09-30 and stopped two workers holding sole claims. Its `--self-test` now covers these sequences — if you change the reclaim protocol, change `OPEN_CLAIMS_JQ` with it.
+"Unreleased" means **posted after the last `release:` or `reclaim:`** — both end every claim before them (step 5 posts the reclaim before the new claim). Counting every `claim:` in the history instead turns any claim → release → claim into a phantom race (was `claim-issue.sh`'s behaviour; overturned, see HISTORY #5). Its `--self-test` now covers these sequences — if you change the reclaim protocol, change `OPEN_CLAIMS_JQ` with it.
 
 Before concluding you are the earliest, check the earlier holder's liveness:
 
@@ -255,7 +255,7 @@ Never invert the first row into a death test. A socket path from another host, o
 
 The one false positive that remains is PID reuse: socket filenames are process ids, so a dead session's path can be reoccupied by an unrelated process and read as "alive". That direction is safe — it makes you too cautious, never too bold — so it needs no handling beyond knowing it exists.
 
-Reading the last `claim:` comment has a second payoff worth naming, because it is what actually went wrong once on the board this was written for: **the holder's progress lives in the comments, not the body.** PR links, scope corrections, and "already done, see #…" all land there. A session that reads only the Issue body can find a fully-claimed, fully-labelled Issue and still redo work that shipped an hour ago.
+Reading the last `claim:` comment has a second payoff (see HISTORY #6): **the holder's progress lives in the comments, not the body.** PR links, scope corrections, and "already done, see #…" all land there. A session that reads only the Issue body can find a fully-claimed, fully-labelled Issue and still redo work that shipped an hour ago.
 
 When the holder *is* alive and you still believe the work should be yours, that is a conversation, not a reclaim. Message the session at its `sock:` (Claude Code: `SendMessage` to the peer from `ListAgents`); if your harness cannot message peers, say what you want in an Issue comment and leave the claim alone. Taking live work is never correct — the whole cost of a duplicate is paid before anyone notices.
 
@@ -270,7 +270,7 @@ gh issue comment <N> --body 'release: <reason>'
 
 Release when: you drop the Issue, the grill ends unclear, the scope moves elsewhere, or you end a session without opening a PR. A merged PR needs no release — `Closes #N` closes the Issue.
 
-**Only the leading prefix is machine-readable.** `claim-issue.sh`, and any other session reading the thread, decides an Issue's state by matching `claim:` / `release:` / `reclaim:` against the *start* of each comment body — nothing else. A comment that explains the same intent but opens with bold text, a different language, or plain prose is invisible to that check, no matter how unambiguous its meaning is to a human reader. Observed 2026-08-31: a comment intended to both reclaim and release two stale claims (it also cleared the assignee and the `In progress` label) opened with bold Chinese prose instead of a prefix. Every script and session that read the thread afterward still counted both old claims as open, because the reset they were relying on had no `release:`/`reclaim:` to match — the confusion surfaced 2026-09-28, four weeks later, when a new worker's `claim-issue.sh` run had to sort it out by hand. What would overturn this: a version of `claim-issue.sh` (or of this protocol) that recognizes a state change from comment content rather than its leading prefix — until then, a comment that does not lead with one of the three prefixes does not change an Issue's claimed state, regardless of what it says.
+**Only the leading prefix is machine-readable.** `claim-issue.sh`, and any other session reading the thread, decides an Issue's state by matching `claim:` / `release:` / `reclaim:` against the *start* of each comment body — nothing else. A comment that explains the same intent but opens with bold text, a different language, or plain prose is invisible to that check, no matter how unambiguous its meaning is to a human reader (a prose reset once left two stale claims counted open for four weeks, see HISTORY #7). What would overturn this: a version of `claim-issue.sh` (or of this protocol) that recognizes a state change from comment content rather than its leading prefix — until then, a comment that does not lead with one of the three prefixes does not change an Issue's claimed state, regardless of what it says.
 
 ### 5. Reclaim stale holds
 
@@ -303,11 +303,7 @@ Write the Issue as the **observed problem** — what is wrong, who it hurts, and
 
 The reason is not style. **A solution outlives its own validity; the pain outlives the solution.** A decision landed a week later can forbid the approach an Issue prescribes while leaving every symptom it reported fully intact — and then the Issue is unactionable as written, even though the problem is real and unfixed.
 
-A real case: an Issue titled *"auto-create the local application when the external system syncs an overtime or leave record"* was filed roughly four hours *after* an accepted decision record said the sync signal «only updates an existing, matching local application to `approved` — **it never auto-creates one**». So:
-
-- Implementing the Issue as titled violates an accepted decision.
-- Closing it as `wontfix` reads as "we do not care" — but the pain is real: the external system holds a record, the local system does not, and the employee cannot see their own leave in this system.
-- Neither option is right, and the Issue sat unactionable. Had it been titled *"overtime/leave that exists externally but not locally is invisible to the employee"*, the decision would have **narrowed** it (auto-create is out; a read-only external record, or a better notification to the administrator, is in) instead of **invalidating** it.
+A real case (see HISTORY #8): an Issue titled with an auto-create fix was filed hours after a decision forbade auto-create. Implementing it violated the decision; `wontfix` denied a real pain; it sat unactionable. Titled by the pain, the decision would have **narrowed** it instead of **invalidating** it.
 
 So, when writing:
 
@@ -374,7 +370,7 @@ Both open exceptions are excluded from the selection query (see [Selecting Work]
 
 When creating a PR that implements an Issue, add `Closes #N` (or `Fixes #N` for bugs) in the PR body referencing the Issue it implements. This makes the Issue auto-close on merge.
 
-- Write it from the start. The merge is the acceptance (see [Merged PR = accepted](#merged-pr--accepted)), so the close it triggers is the right one. This used to say `Closes #N` was valid only after a separate pre-merge acceptance; with merge = acceptance, that step no longer exists.
+- Write it from the start. The merge is the acceptance (see [Merged PR = accepted](#merged-pr--accepted)), so the close it triggers is the right one. Was: `Closes #N` only after a separate pre-merge acceptance — overturned, see HISTORY #1.
 - One PR implements at most one atomic Issue. A parent Issue (batch) is closed when its last sub-Issue merges; the PR closes the sub-Issue, not the parent.
 
 ## Write Boundaries

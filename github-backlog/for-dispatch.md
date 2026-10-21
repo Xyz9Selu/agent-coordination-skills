@@ -13,9 +13,9 @@
 「读一件活的全部记录」在 GitHub 上就是**正文加评论**。被 grill 过的 Issue 正文是旧的，真实范围在评论里；只读
 正文会算错影响面。
 
-**坑（2026-08-26 实测）：改完标签/assignee 后立刻跑选取查询会失真。** `gh issue list --search` 走 GitHub 搜索
-索引，最终一致；`gh issue view` 读实时。那一轮释放两件 Issue 后立刻跑选取查询，只有一件回到候选池，而 `view`
-显示两者都已干净。判断刚变更过的 Issue 状态，用 `view` 不用查询。
+**坑：改完标签/assignee 后立刻跑选取查询会失真。** `gh issue list --search` 走 GitHub 搜索索引，最终一致；
+`gh issue view` 读实时（见 HISTORY #9）。判断刚变更过的 Issue 状态，用 `view` 不用查询。推翻条件：改完立刻查询
+就能读到新状态。
 
 ## Q2 怎么占住
 
@@ -38,8 +38,7 @@ PR 状态）。输出与 `dispatch` 的四个读数一一对应：
 | `UNKNOWN` | 占了但活性未知 |
 | `probably dead` | 占了但大概死了 |
 
-- 旧格式的 claim（单行式，没有 `sock:` 字段）一律读成 `UNKNOWN` —— 这是设计如此，不是故障（2026-08-25 盘面上两件活
-  皆如此）。随着各 session 用新格式重新占住，这一条会自然消退。
+- 旧格式的 claim（单行式，没有 `sock:` 字段）一律读成 `UNKNOWN` —— 这是设计如此，不是故障（见 HISTORY #10）。
 - agy 起的 worker 写的是 `sock: none`，`--check` 对它恒报 `UNKNOWN`；活性按 `herdr-agents` 技能 §6 用进程判断。
 - `UNKNOWN` 时唯一权威是 `SKILL.md` §5 的「2 天无提交」规则，`--check` 会连同分支状态一起打印。
 - 刚被 `claude --resume` 重启过的 worker，`sock:` 指向旧 pid，`--check` 会报 `probably dead` 或 `HOLDER ALIVE`——
@@ -55,7 +54,7 @@ PR 状态）。输出与 `dispatch` 的四个读数一一对应：
 - **`CLOSED` / `Done` 不等于做完了。** development 链接会在没有 PR 合并的情况下自动关 Issue，那不是验收；有一件
   Issue 就是 CLOSED + `Done` 而 worktree、分支、已退出的 session 全在盘上。以地面事实为准：看 PR 合没合，不看
   Issue 关没关。
-- **核「已合并」**（dispatch 的 `secondhand-claims.md`「用户口头说的『已合并』也要核」）：
+- **核「已合并」**（dispatch 的 `SKILL.md`「同伴递来的因果说法」里「人说的也要核」）：
   ```bash
   gh pr view <N> --json state,mergedAt
   git show origin/main:<该 PR 改过的文件> | grep -c "<它应该删掉的东西>"

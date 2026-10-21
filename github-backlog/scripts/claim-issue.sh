@@ -6,10 +6,8 @@
 # comment carrying branch, worktree, host, sid, pid, sock", which leaves every
 # caller to assemble six coordinates by hand. A claim reassembled from prose
 # every time is a claim written differently every time — and the whole point of
-# the fixed fields is that a *peer* can act on them mechanically. On the board
-# this script was written for, hand-assembled claims already disagreed: one named
-# a worktree that did not exist, another named a branch that did not exist.
-# Coordinates a peer cannot resolve are worth nothing.
+# the fixed fields is that a *peer* can act on them mechanically (see
+# github-backlog/HISTORY.md #2). Coordinates a peer cannot resolve are worth nothing.
 #
 # It also does the preflight and the verify that are easy to skip:
 #   - preflight: is the Issue already held by a session that is still ALIVE?
@@ -27,14 +25,10 @@
 # Why a script: --self-test, --check, uniform output, and no quoting traps
 # around the `·` separator. NOT because a snippet is impossible -- the skill
 # carries a one-line fallback that emits all six fields and runs fine inside a
-# worktree-isolated session. Five successive attributions of that wall were
-# wrong on 2026-08-25 (`git` in a substitution / substitution plus compound flow
-# / substitution refused wholesale / an argument that is entirely a substitution
-# / $CLAUDE_* being unreachable). Only two survive measurement: a bare `$(...)`
-# argument is refused while the same substitution inside literal text passes,
-# and $CLAUDE_* *expansion* is refused -- which `$(printenv VAR)` sidesteps.
-# The lesson worth keeping: before writing "cannot" into a doc other agents
-# copy from, try one equivalent form.
+# worktree-isolated session. A bare `$(...)` argument is refused while the same
+# substitution inside literal text passes, and $CLAUDE_* *expansion* is refused
+# -- which `$(printenv VAR)` sidesteps. Five other attributions were wrong; see
+# HISTORY #3.
 #
 # This is NOT a lock. Every session authenticates as the same GitHub account,
 # so `gh issue edit --add-assignee @me` exits 0 whether or not somebody holds
@@ -117,10 +111,8 @@ claim_body() {
 # superseding them (the skill's step 5 posts the reclaim *before* the new
 # claim). More than one open claim after our own write is a race.
 #
-# Replaced (2026-09-30): "0 if the last marker is a release, else every claim
-# and reclaim ever posted". It never looked for the *last* boundary, so any
-# claim → release → claim read as a race, and a documented reclaim counted the
-# reclaim marker itself as a claim. What would overturn this: the skill's
+# Was "0 if the last marker is a release, else every claim and reclaim ever
+# posted" -- overturned, see HISTORY #5. What would overturn this: the skill's
 # reclaim protocol stops posting `reclaim:` before `claim:` — then a reclaim is
 # no longer a boundary and this filter must change with it.
 OPEN_CLAIMS_JQ='
@@ -156,8 +148,8 @@ verdict_for() {  # verdict_for <claim-comment-text>
 }
 
 # A reclaim: is a marker, not a claim: it names no branch (its text is
-# "superseding claim of <ts> — <grounds>"). Until 2026-09-29 this also matched
-# reclaim: lines, and --check printed "claimed branch: superseding".
+# "superseding claim of <ts> — <grounds>"). Was: also matched reclaim: lines --
+# overturned, see HISTORY #5.
 claim_branch() {  # claim_branch <claim-comment-text>
   printf '%s\n' "$1" | head -1 | sed -n 's/^claim:[[:space:]]*\([^[:space:]]*\).*/\1/p'
 }
@@ -313,8 +305,7 @@ self_test() {
   sid="$orig_sid"
   [ -n "$temp_sock_dir" ] && rm -rf "$temp_sock_dir"
 
-  # Open-claim counting. Observed 2026-09-30: claim → release → claim read as
-  # "2 unreleased claims" and stopped two workers whose claims were sole holds.
+  # Open-claim counting: claim → release → claim must not read as a race (HISTORY #5).
   check_open() {  # check_open <expected-count> <label> <comment-kind>...
     local expected="$1" label="$2"; shift 2
     local json

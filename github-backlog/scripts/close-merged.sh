@@ -22,9 +22,7 @@
 # merge commit is not on the base branch (merged into another PR's branch, say) did not
 # ship anything.
 #
-# Why a script: before 2026-10-21 this lived inside the dispatch skill's closeout.sh,
-# which made the coordinator skill write GitHub labels while its README said it "knows
-# nothing about GitHub". When to set Done belongs to this skill, so the command does too.
+# When to set Done belongs to this skill, so the command does too (see HISTORY #11).
 
 set -u
 check=0

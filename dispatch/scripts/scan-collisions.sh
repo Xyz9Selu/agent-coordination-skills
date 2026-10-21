@@ -16,8 +16,7 @@
 #
 # 来源（扫谁）：命令行给的 ref、`--worktree` 给的工作区（**未提交的也算**，撞号越早发现越便宜）、`--prs` 打开着的
 # PR 的头分支。三者都没给时等于 `--prs`。同一条分支既有 worktree 又有 ref 时只扫 worktree（它更新）。
-# 不扫「本机所有 worktree」：别的会话留下的旧 worktree 会刷满噪音（2026-10 前任 coordinator 只好在外面套
-# `grep -v worktree-agent-`）。由调用方（scan-workers.sh）决定哪些 worktree 是在飞的。
+# 不扫「本机所有 worktree」：别的会话留下的旧 worktree 会刷满噪音。由调用方（scan-workers.sh）决定哪些 worktree 是在飞的。
 #
 # 退出码：0 = 无撞号；1 = 发现撞号；9 = 脚本自身出错（目录不存在、ref 解析不了、gh 失败……）。
 # 三者分开，是因为巡检脚本崩溃和真实告警在退出码上分不出来时已经误报过两次。
@@ -33,10 +32,7 @@
 #
 # 输出：发现撞号的每一行以 🔴 开头，内容只取决于各分支的内容，不含时间戳 —— 调用方可以直接 diff 两次的 🔴 行。
 #
-# 旧版（2026-10-21 前）为什么换掉：只读 `revision`、从不读 `down_revision`，「编号不同但接在同一个点上」和
-# 「接在过时的 head 上」两种双头都报「无撞号」；对每个 ref 把全部迁移文件逐个 `git show`，smart-manu-ops 上一次
-# 34 秒、占满一个核；结尾提示「先占者保号」，和 patrol.md 的「先合并的保号」相反。可重复的对照见
-# test-scan-collisions.sh（`SCAN=<旧版> LEGACY=1` 能复现旧版的失败）。
+# 曾是只读 `revision`、扫全部 worktree 的旧版，已推翻（抓不到分叉与过时 head），见 dispatch/HISTORY.md #29。
 
 set -uo pipefail
 

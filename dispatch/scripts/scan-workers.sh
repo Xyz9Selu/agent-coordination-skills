@@ -32,6 +32,8 @@
 #   AGENT-GONE     agent 从 `herdr agent list` 里消失（进程退出）。收尾过的正常；没收尾的去看 worktree、分支、PR。
 #   AGENT-STATUS   状态变了，**连续两轮一致才报**（防抖，见下），附画面最后几行。working→idle/done 多半是
 #                  做完一步或在等人：读回它说了什么，该回话就回话。
+#                  看不见的：agy 接口报错停住（herdr 仍报 working）、pane 被滚上去时的新权限框（读的是
+#                  visible）——见 patrol.md「事件流」的「它看不见的东西」。
 #   AGENT-PROMPT   画面上有权限 / 确认框，**不防抖，立刻报**。去看框里问的是什么；在授权范围内就替用户点，
 #                  否则转给用户。
 #   PR-NEW / PR-STATE / PR-LEFT   新 PR、draft↔ready、PR 离开 open 列表（附现在的状态：MERGED / CLOSED）。

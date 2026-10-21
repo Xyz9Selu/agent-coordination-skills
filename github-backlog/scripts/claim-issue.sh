@@ -155,8 +155,11 @@ verdict_for() {  # verdict_for <claim-comment-text>
   fi
 }
 
+# A reclaim: is a marker, not a claim: it names no branch (its text is
+# "superseding claim of <ts> — <grounds>"). Until 2026-09-29 this also matched
+# reclaim: lines, and --check printed "claimed branch: superseding".
 claim_branch() {  # claim_branch <claim-comment-text>
-  printf '%s\n' "$1" | head -1 | sed -n 's/^\(claim\|reclaim\):[[:space:]]*\([^[:space:]]*\).*/\2/p'
+  printf '%s\n' "$1" | head -1 | sed -n 's/^claim:[[:space:]]*\([^[:space:]]*\).*/\1/p'
 }
 
 # Decide what to do when preflight found a live holder. Split out of the main
@@ -328,8 +331,19 @@ self_test() {
   check_open 1 "documented reclaim ⇒ only the new claim"     claim reclaim claim
   check_open 2 "race after a reclaim is still a race"        claim reclaim claim claim
   check_open 1 "non-protocol comments are ignored"           claim note release note claim
+  check_open 0 "reclaim not yet followed by a claim"         claim reclaim
+  # Pins a known limit rather than endorsing it: release: names no releaser, so
+  # a race loser's release also closes the winner's claim.
+  check_open 0 "loser's release closes the winner too (known limit)" claim claim release
 
-  [ "$fails" -eq 0 ] && echo "all liveness cases pass" || echo "$fails case(s) FAILED"
+  got="$(claim_branch 'reclaim: superseding claim of t1 — branch gone')"
+  if [ -z "$got" ]; then printf 'ok   reclaim: line yields no claimed branch\n'
+  else printf 'FAIL reclaim: line yields no claimed branch\n       got: %s\n' "$got"; fails=$((fails+1)); fi
+  got="$(claim_branch 'claim: fix/181-x · t')"
+  if [ "$got" = "fix/181-x" ]; then printf 'ok   claim: line yields its branch\n'
+  else printf 'FAIL claim: line yields its branch\n       got: %s\n' "$got"; fails=$((fails+1)); fi
+
+  [ "$fails" -eq 0 ] && echo "all liveness and open-claim cases pass" || echo "$fails case(s) FAILED"
   return "$fails"
 }
 
@@ -349,7 +363,7 @@ for n in "${issues[@]}"; do
 
   # ---- preflight: is it held, and is the holder alive? ----
   case "$last" in
-    claim:*|reclaim:*)
+    claim:*)
       verdict="$(verdict_for "$last")"
       echo "  held: ${last%%$'\n'*}"
       echo "  liveness: $verdict"
@@ -365,10 +379,11 @@ for n in "${issues[@]}"; do
       ;;
     "")        echo "  no prior claim" ;;
     release:*) echo "  last action was a release — free" ;;
+    reclaim:*) echo "  last action was a reclaim with no claim after it — free (its author should be claiming next)" ;;
   esac
 
   if [ "$check_only" -eq 1 ]; then
-    stale_grounds "$last"
+    case "$last" in claim:*) stale_grounds "$last" ;; esac
     continue
   fi
 

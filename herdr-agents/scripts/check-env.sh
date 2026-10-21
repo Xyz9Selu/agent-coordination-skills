@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # check-env.sh —— 把本机 herdr 与各 agent CLI 的版本，和 herdr-agents 技能里标注的实测版本对一遍；
-# 再看三份技能（herdr-agents / github-backlog / dispatch）在两处用户级目录里各在不在：
+# 再看五份技能（herdr-agents / github-backlog / dispatch / todo-recorder / todo-executor）在两处用户级目录里各在不在：
 #   ~/.agents/skills/<名>          Claude Code（经 ~/.claude/skills）、OpenCode 从这里找
 #   ~/.gemini/config/skills/<名>   agy 从这里找（它不扫 ~/.agents/skills/，见 SKILL.md §8）
 #
@@ -15,7 +15,8 @@
 # 下面的实测版本必须与 SKILL.md / startup-evidence.md 里写的一致；改了那边的实测，就改这里。
 set -uo pipefail
 
-TESTED_HERDR="0.9.1"      # SKILL.md「版本绑定」、startup-evidence.md
+TESTED_HERDR="0.9.5"      # SKILL.md「版本绑定」里最新的一批实测（2026-10-21）；更早的条目绑在 0.8.0 / 0.9.1，见那一节
+TESTED_CLAUDE="2.1.306"   # SKILL.md §1「claude kind」、§2（2026-10-21）
 TESTED_AGY="1.2.12"       # startup-evidence.md ①a、SKILL.md §8
 TESTED_OPENCODE="1.18.32" # SKILL.md §8（技能发现）
 
@@ -56,7 +57,7 @@ else
 fi
 
 found=0
-if command -v claude >/dev/null 2>&1; then report claude "" "$(claude --version 2>&1)"; found=1; fi
+if command -v claude >/dev/null 2>&1; then report claude "$TESTED_CLAUDE" "$(claude --version 2>&1)"; found=1; fi
 if command -v agy >/dev/null 2>&1; then report agy "$TESTED_AGY" "$(agy --version 2>&1)"; found=1; fi
 if command -v opencode >/dev/null 2>&1; then report opencode "$TESTED_OPENCODE" "$(opencode --version 2>&1)"; found=1; fi
 [ "$found" -eq 1 ] || echo "⚠ claude / agy / opencode 一个都没找到——没有可以起的 agent。"
@@ -64,7 +65,7 @@ if command -v opencode >/dev/null 2>&1; then report opencode "$TESTED_OPENCODE" 
 echo
 echo "技能安装位置（SKILL.md §8：用户级要链两处）："
 for d in "$HOME/.agents/skills" "$HOME/.gemini/config/skills"; do
-  for n in herdr-agents github-backlog dispatch; do
+  for n in herdr-agents github-backlog dispatch todo-recorder todo-executor; do
     if [ -f "$d/$n/SKILL.md" ]; then
       echo "✅ $d/$n"
     else

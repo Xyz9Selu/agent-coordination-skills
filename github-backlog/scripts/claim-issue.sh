@@ -111,6 +111,24 @@ claim_body() {
     "$branch" "$ts" "$worktree" "$host" "$sid" "$pid" "$sock"
 }
 
+# The claims still open on an Issue, as a jq filter over `gh issue view --json
+# comments`: every `claim:` posted after the last `release:` or `reclaim:`.
+# Both end the claims before them — a release by its holder, a reclaim by
+# superseding them (the skill's step 5 posts the reclaim *before* the new
+# claim). More than one open claim after our own write is a race.
+#
+# Replaced (2026-09-30): "0 if the last marker is a release, else every claim
+# and reclaim ever posted". It never looked for the *last* boundary, so any
+# claim → release → claim read as a race, and a documented reclaim counted the
+# reclaim marker itself as a claim. What would overturn this: the skill's
+# reclaim protocol stops posting `reclaim:` before `claim:` — then a reclaim is
+# no longer a boundary and this filter must change with it.
+OPEN_CLAIMS_JQ='
+  [.comments[] | select(.body|test("^(claim|reclaim|release):"))]
+  | ([.[] | .body | test("^(release|reclaim):")] | indices(true) | last) as $b
+  | .[(if $b == null then 0 else $b + 1 end):]
+  | [.[] | select(.body|test("^claim:"))]'
+
 field() {  # field <name> <text>
   printf '%s\n' "$2" | sed -n "s/.*[[:space:]]$1:[[:space:]]*\([^[:space:]]*\).*/\1/p" | head -1
 }
@@ -137,25 +155,12 @@ verdict_for() {  # verdict_for <claim-comment-text>
   fi
 }
 
+# A reclaim: is a marker, not a claim: it names no branch (its text is
+# "superseding claim of <ts> — <grounds>"). Until 2026-09-29 this also matched
+# reclaim: lines, and --check printed "claimed branch: superseding".
 claim_branch() {  # claim_branch <claim-comment-text>
   printf '%s\n' "$1" | head -1 | sed -n 's/^claim:[[:space:]]*\([^[:space:]]*\).*/\1/p'
 }
-
-# Which claims are still open. Every release: and every reclaim: closes all the
-# claims posted before it; only claim: comments after the LAST such marker are
-# open. A reclaim: is a marker, not a claim -- it carries no host/sid/sock and
-# is always followed by the reclaimer's own claim: (step 5). The previous
-# version zeroed the count only when the very last marker was a release: and
-# otherwise counted every claim|reclaim ever posted, so on an Issue with an old
-# history each reclaim made the "unreleased claims" warning go UP (seen on a
-# real Issue 2026-09-28: 3, then 5 after a reclaim, where 1 was right).
-# Known limit: release: names no releaser, so a race loser's release also
-# closes the winner's claim here (self-test case "loser's release").
-# Defined once, used by preflight, verify and --self-test, so the test runs
-# the same filter the writes are judged by.
-OPEN_CLAIMS_JQ='def open_claims:
-  reduce (.comments[] | select(.body | test("^(claim|reclaim|release):"))) as $c
-    ([]; if ($c.body | test("^(release|reclaim):")) then [] else . + [$c] end);'
 
 # Decide what to do when preflight found a live holder. Split out of the main
 # loop so --self-test can drive check_only/force combinations directly,
@@ -304,46 +309,39 @@ self_test() {
   check_holder_action "no flags: refuses, no force narration"                 0 0 0 1
   check_holder_action "--check --force: still narrates force"                 1 1 1 0
 
-  # open-claim counting: the filter verify and preflight use, on built histories.
-  # Runs under the system jq; production runs it under gh's built-in gojq --
-  # both agreed on every case here when this was written (2026-09-29).
-  check_open() {  # check_open <expected-count> <label> <comment-body>...
-    local want="$1" label="$2" json n
-    shift 2
-    if ! command -v jq >/dev/null 2>&1; then printf 'SKIP %s (no jq)\n' "$label"; return 0; fi
-    json="$(jq -n '{comments: [$ARGS.positional[] | {body: ., createdAt: "t"}]}' --args "$@")"
-    n="$(jq "$OPEN_CLAIMS_JQ"' open_claims | length' <<<"$json")"
-    if [ "$n" = "$want" ]; then printf 'ok   %s\n' "$label"
-    else printf 'FAIL %s\n       expected: %s open claim(s)\n       got:      %s\n' "$label" "$want" "$n"; fails=$((fails+1)); fi
-  }
-  local ca='claim: a · t1' cb='claim: b · t2' cc='claim: c · t3'
-  local rel='release: done' rec='reclaim: superseding claim of t1 — branch gone'
-  check_open 1 "single claim"                              "$ca"
-  check_open 0 "claim → release"                           "$ca" "$rel"
-  check_open 1 "claim → release → claim ⇒ 1, not 2"        "$ca" "$rel" "$cb"
-  check_open 1 "claim → reclaim → claim ⇒ 1, not 3"        "$ca" "$rec" "$cb"
-  check_open 2 "two claims, no marker ⇒ a race"            "$ca" "$cb"
-  check_open 2 "race after a reclaim still surfaces"       "$ca" "$rec" "$cb" "$cc"
-  check_open 0 "reclaim not yet followed by a claim"       "$ca" "$rec"
-  check_open 1 "old claims, reclaim, then re-claim ⇒ 1, not 5" \
-    "$ca" "$ca" "free text, no prefix" "$cb" "$rec" "$cb"
-  check_open 0 "'claim:' on a later line is not a claim"   $'progress\nclaim: x · t'
-  # Pins the known limit rather than endorsing it: release: names no releaser,
-  # so a race loser's release also closes the winner's claim.
-  check_open 0 "loser's release closes the winner too (known limit)" "$ca" "$cb" "$rel"
-
-  # --check once read a reclaim: marker as the holder and printed
-  # 'claimed branch: superseding'. A marker names no branch.
-  got="$(claim_branch "$rec")"
-  if [ -z "$got" ]; then printf 'ok   reclaim: line yields no claimed branch\n'
-  else printf 'FAIL reclaim: line yields no claimed branch\n       got: %s\n' "$got"; fails=$((fails+1)); fi
-  got="$(claim_branch "claim: fix/181-x · t")"
-  if [ "$got" = "fix/181-x" ]; then printf 'ok   claim: line yields its branch\n'
-  else printf 'FAIL claim: line yields its branch\n       got: %s\n' "$got"; fails=$((fails+1)); fi
-
   sock="$orig_sock"
   sid="$orig_sid"
   [ -n "$temp_sock_dir" ] && rm -rf "$temp_sock_dir"
+
+  # Open-claim counting. Observed 2026-09-30: claim → release → claim read as
+  # "2 unreleased claims" and stopped two workers whose claims were sole holds.
+  check_open() {  # check_open <expected-count> <label> <comment-kind>...
+    local expected="$1" label="$2"; shift 2
+    local json
+    json="$(python3 -c 'import json,sys; print(json.dumps({"comments":[{"body":k+": x","createdAt":"t%d"%i} for i,k in enumerate(sys.argv[1:])]}))' "$@")"
+    got="$(jq "$OPEN_CLAIMS_JQ | length" <<<"$json")"
+    if [ "$got" = "$expected" ]; then printf 'ok   %s\n' "$label"
+    else printf 'FAIL %s\n       expected: %s open\n       got:      %s\n' "$label" "$expected" "$got"; fails=$((fails+1)); fi
+  }
+  check_open 1 "sole claim"                                  claim
+  check_open 2 "two claims, no release ⇒ race"               claim claim
+  check_open 0 "claim then release ⇒ none open"              claim release
+  check_open 1 "claim, release, claim ⇒ only the new one"    claim release claim
+  check_open 2 "race after a release is still a race"        claim release claim claim
+  check_open 1 "documented reclaim ⇒ only the new claim"     claim reclaim claim
+  check_open 2 "race after a reclaim is still a race"        claim reclaim claim claim
+  check_open 1 "non-protocol comments are ignored"           claim note release note claim
+  check_open 0 "reclaim not yet followed by a claim"         claim reclaim
+  # Pins a known limit rather than endorsing it: release: names no releaser, so
+  # a race loser's release also closes the winner's claim.
+  check_open 0 "loser's release closes the winner too (known limit)" claim claim release
+
+  got="$(claim_branch 'reclaim: superseding claim of t1 — branch gone')"
+  if [ -z "$got" ]; then printf 'ok   reclaim: line yields no claimed branch\n'
+  else printf 'FAIL reclaim: line yields no claimed branch\n       got: %s\n' "$got"; fails=$((fails+1)); fi
+  got="$(claim_branch 'claim: fix/181-x · t')"
+  if [ "$got" = "fix/181-x" ]; then printf 'ok   claim: line yields its branch\n'
+  else printf 'FAIL claim: line yields its branch\n       got: %s\n' "$got"; fails=$((fails+1)); fi
 
   [ "$fails" -eq 0 ] && echo "all liveness and open-claim cases pass" || echo "$fails case(s) FAILED"
   return "$fails"
@@ -360,8 +358,7 @@ for n in "${issues[@]}"; do
   echo "=== #$n ==="
 
   last="$(gh issue view "$n" --json comments \
-    --jq "$OPEN_CLAIMS_JQ"' (open_claims | last | .body)
-      // ([.comments[].body | select(test("^(claim|reclaim|release):"))] | last // "")' 2>&1)" || {
+    --jq '[.comments[].body | select(test("^(claim|reclaim|release):"))] | last // ""' 2>&1)" || {
       echo "  ERROR: cannot read #$n — $last" >&2; rc=1; continue; }
 
   # ---- preflight: is it held, and is the holder alive? ----
@@ -406,11 +403,11 @@ for n in "${issues[@]}"; do
 
   # ---- verify: the assignee write cannot fail, so this is the only place a
   # ---- collision surfaces.
-  open_claims="$(gh issue view "$n" --json comments --jq "$OPEN_CLAIMS_JQ"' open_claims | length')"
+  comments_json="$(gh issue view "$n" --json comments)"
+  open_claims="$(jq "$OPEN_CLAIMS_JQ | length" <<<"$comments_json")"
   if [ "${open_claims:-0}" -gt 1 ]; then
     echo "  ⚠ $open_claims unreleased claims on #$n — EARLIEST TIMESTAMP WINS."
-    gh issue view "$n" --json comments --jq "$OPEN_CLAIMS_JQ"'
-      open_claims[] | "    \(.createdAt)  \(.body | split("\n")[0])"'
+    jq -r "$OPEN_CLAIMS_JQ"' | .[] | "    \(.createdAt)  \(.body | split("\n")[0])"' <<<"$comments_json"
     echo "  If yours is not the earliest: release it and re-select."
     rc=1
   fi

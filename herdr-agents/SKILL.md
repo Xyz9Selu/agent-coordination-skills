@@ -17,10 +17,16 @@ description: Use when driving another coding agent (claude / agy / opencode) thr
 
 ## 版本绑定
 
-> **每条都绑在一个 herdr 版本上。** 下面「已知陷阱」多数条目实测于 **0.8.0**；陷阱 ① 已随 **0.9.0**
-> 修复，其余条目**未在 0.9.1 上复测**。发现某条对不上时，先核 `herdr --version` 与
+> **每条都绑在一个 herdr 版本上。** 下面「已知陷阱」多数条目实测于 **0.8.0**，**未在 0.9.x 上复测**；
+> 陷阱 ① 的现状实测于 **0.9.1**（对 agy 仍复现，见下）；带 2026-10-21 日期的 claude kind 条目实测于
+> **0.9.5 + Claude Code 2.1.306**。发现某条对不上时，先核 `herdr --version` 与
 > `https://herdr.dev/latest.json` 的发布说明——上游可能已经修了，那就该升级，而不是在这里
 > 加一条新的变通写法。
+>
+> **被推翻的旧说法**：这里原先写「陷阱 ① 已随 **0.9.0** 修复」。依据是 0.9.0 的发布说明（「`agent prompt`
+> now reliably sends the prompt and Enter before reporting successful submission」），没有实测；2026-09-22
+> 在 0.9.1 上对 agy 做的对照实验仍然复现（立即发 0/4），见陷阱 ① 和 `startup-evidence.md`「版本」。发布说明
+> 说修了，不等于这条路径修了。
 
 「已知陷阱」这一组条目最早是 2026-08-25 实测记下的，返回值都不会告诉你。下面按用途分节，
 编号 ①–⑦ 保留原来的编号，方便和旧记录对照。
@@ -52,6 +58,36 @@ agy 的模型名：`gemini-3.8-flash-high` 是写下时（2026-09-17/18）最新
   实测通过）。所以**标签给人看、agent 名给命令用**。
 - **`herdr agent rename <pane_id> <名字>` 可用**（2026-08-26 实测）。在 herdr 之外直接起的 agy 在
   `agent list` 里是 `name=None`，按名字发不了 prompt；用 pane id 当 target 补个名字就能寻址了。
+
+### opencode kind：启动目录就是它的项目根，要把 worktree 路径直接传给它
+
+    herdr agent start <名> --kind opencode --pane <p> --timeout 90000 -- \
+        --model opencode-go/deepseek-v4.1-flash <worktree 的绝对路径>
+
+`opencode [project]` 的位置参数就是项目目录（`opencode --help`：「project  path to start opencode in」）。
+**先建好 worktree，再用它的路径起 OpenCode**；手册、结果文件放在别处（如 `~/.cache/<运行目录>/…`）照常用
+绝对路径读写，那一处会弹一次权限框，可以接受。
+
+**为什么。** OpenCode 把「启动目录以外」的路径一律走 `external_directory` 权限，每碰一个新子目录弹一次
+`Allow once / Allow always / Reject`；`Allow always` 只放行**那一个子目录**的 pattern（例如
+`…/cmp-ds/frontend/tests/e2e/*`），读到 `…/backend/app/services` 又问一遍。选 Allow always 后还会再弹一个
+「This will allow the following patterns until OpenCode is restarted — Confirm / Cancel」，要再按一次 Enter
+才放行；OpenCode 重启后这些放行全部失效。**启动之后改不了项目目录**：TUI 里没有 `/cd` 一类命令，让它在
+bash 里 `cd` 只改那条命令的 shell，权限检查仍按启动目录算；自定义命令（`commands/`）也在项目根目录运行。
+
+**何时观测、怎么测的。** 2026-10-13，OpenCode 1.18.34 + herdr 0.9.3，smart-manu-ops #957 的执行者对比：
+OpenCode（deepseek v4.1 flash）被起在 `~/.cache/smops-runs/runner-compare/`，在
+`~/.herdr/worktrees/smart-manu-ops/cmp-ds` 里跑 26 条 e2e 要点，弹了 7 次以上权限框（每次一个新子目录）；
+同时、同手册、同类目录布局的 Claude Code（Haiku，auto mode）0 次。前一天 #916 / #944 的 OpenCode 执行者
+同样起在运行目录、同样逐目录弹框。
+
+**否掉的做法。** ① 在 `~/.config/opencode/opencode.json` 加 `"permission": {"external_directory":
+{"<路径>/**": "allow"}}`——官方支持，但改的是全局配置，影响所有项目的 OpenCode；② `--auto`（帮助里写着
+「auto-approve permissions that are not explicitly denied (dangerous!)」），放行范围太宽。
+
+**什么观测会推翻本节：** OpenCode 新版本有了会话内切换项目目录的命令；`Allow always` 改成放行整棵目录树；
+或者按本节起在 worktree 里，读写 worktree 仍然弹 `external_directory` 框。任一出现，记下
+`opencode --version` 重测。
 
 ### 陷阱 ① `agent start` 返回时 TUI 还没接管终端，此时发出的 prompt 会丢 —— 而 `--wait` 有四分之一的概率谎报成功
 
@@ -89,8 +125,7 @@ done
 - 判据串是 `Antigravity CLI [0-9]`，**不是** `Antigravity CLI`：信任对话框里有一句「Antigravity CLI
   requires permission…」，不带版本号的串会在对话框阶段就误判 banner 到了。banner 是
   「Antigravity CLI 1.2.12」这种带版本号的写法。
-- 其它 kind 的 banner 特征字串不同，**自己回读一眼定**。claude kind 在新目录里有没有类似的信任
-  对话框、`--lines 20` 读不读得到它，**没测过**。
+- 其它 kind 的 banner 特征字串不同，**自己回读一眼定**（claude 见下一小节）。
 
 **完成判据：** 循环是因为匹配到 banner 特征串而 `break` 的，不是因为跑满 60 次。跑满了就是没就绪，
 先 `pane read --source visible` 看画面停在哪，别发——看之前先确认这个 pane 没被滚上去（陷阱 ④b）。
@@ -98,6 +133,28 @@ done
 **什么观测会推翻本节**：轮询到 banner 之后发出的 prompt 仍然丢；或者立即发能稳定成功；新 worktree 里
 启动 agy 不再弹信任对话框；banner 不再带版本号。任一出现，按 `startup-evidence.md` 里对应的推翻条件
 重做实验，并先核 `herdr --version`。
+
+### claude kind：特征串、信任框，以及一条命令做完 §1–§2
+
+**`scripts/launch.sh`** 把 claude kind 的整套序列串成一条命令：建 worktree（`herdr worktree create`，先 fetch
+基点）→ 起 claude → 轮询就绪并按掉信任框 → 发一次指令 → 用 `scripts/count-delivered.sh` 数送达次数。用法见
+文件头；`DRY_RUN=1` 只打印命令。它替你做的每一步，判据都在本节和 §2：
+
+- **就绪特征串是 `Claude Code v`**（banner 里带版本号的那一行），用 `pane read --source visible` 轮询。
+- **信任框默认选中的是「No, exit」**。Claude Code 在没信任过的目录里起（新 worktree 常常是），先出：
+
+      ❯ No, exit
+        Yes, I trust this folder
+
+  直接按 Enter 会让会话退出，后面发的 prompt 打进裸 shell。**不要假设默认项**：读 `❯` 那一行，不在「Yes」上就
+  按 `down`，在了才按 Enter。框出现时 `agent start` 立刻返回 `agent_not_ready`（它看得出被挡住了）。
+  **何时、怎么测的**：2026-10-21，Claude Code 2.1.306 + herdr 0.9.5，三次：一个 job 临时目录、一个 `~/.cache`
+  下的新目录、一个从没用过的仓库的新 herdr worktree，都弹了；一个信任过的仓库的 herdr worktree 没弹。第一次
+  照 agy 的写法直接按 Enter，会话退出了。
+  **推翻条件**：Claude Code 改了默认选项或文案（那时 `launch.sh` 的就绪循环会跑满 60 次、报 `NOT READY`，
+  不会误按）；新目录不再弹框。
+  **被推翻的旧说法**：这里原文写的是「claude kind 在新目录里有没有类似的信任对话框，**没测过**」——当时确实
+  没测；`launch.sh` 的前身照 agy 的写法「看到 trust this folder 就按 Enter」，按下去就退出了。
 
 ## 2 · 发指令，并确认它送达了、只送达了一次
 
@@ -143,17 +200,25 @@ ls ~/.claude/projects/<worktree-slug>/*.jsonl | wc -l   # 发之前、发之后�
 重发）。所以改成数内容，两种都能抓：
 
 ```bash
-python3 -c "
-import json
-n=0
-for line in open('<transcript.jsonl>',encoding='utf-8'):
-    d=json.loads(line)
-    if d.get('type')=='user':
-        c=d.get('message',{}).get('content')
-        t=c if isinstance(c,str) else ' '.join(x.get('text','') for x in c if isinstance(x,dict))
-        if '<prompt 里一句独特的话>' in t: n+=1
-print(n)"
+scripts/count-delivered.sh <worktree 路径 | transcript.jsonl> '<prompt 里一句独特的话>'   # 输出次数
 ```
+
+计数代码只有这一份（`launch.sh` 也调它）。它数两种记录、排除两种，下面两段是为什么。
+
+**斜杠命令展开出的 `isMeta` 记录不数**：经 `agent prompt` 打进去的 `/某技能 <参数>`，除了一条普通的 `user`
+记录，技能正文会作为一条 `isMeta: true` 的 `user` 记录进对话，参数在里面再出现一次。**何时、怎么测的**：
+2026-10-21，在本机最近约 400 份 transcript 里找「命令行参数原样出现在某条 isMeta 记录里」的，找到 4 份。
+**推翻条件**：Claude Code 改了斜杠命令展开的记法。**被推翻的旧写法**：这里原先贴的计数代码没排除 `isMeta`，
+对斜杠命令起头的指令会数成 2，读成「重复送达」；dispatch 当时的 `launch.sh` 排除了——两份并存、各说各的，
+现在只留脚本这一份。
+
+**对方正忙时发的指令不记成 `user`**：先记一条 `queue-operation`（`operation: enqueue`），被取出时再记一条
+`remove`，真正进入对话的是一条 `type: attachment`、`attachment.type: queued_command`（文本在 `attachment.prompt`），
+整个过程**没有 `user` 记录**。所以上面连 `queued_command` 一起数；`queue-operation` 那两条不要数，否则一次投递
+会数成两三次。对方空闲时发的才记成 `user`。
+**何时、怎么测的**：2026-10-21，Claude Code 2.1.306，同一个 worker 的 transcript：忙时排队的那条只有 `enqueue` /
+`remove` / `queued_command` 各一条、`user` 为 0；空闲时发的几条各有一条 `user`。原来只数 `user`，对排队的那条读出
+0，是假阴性。**推翻条件**：Claude Code 改了排队消息的记法。
 
 `<worktree-slug>` = worktree 绝对路径把 `/` 换成 `-`，**`.` 也变 `-`**（`/home/<user>/.herdr/...` →
 `-home-<user>--herdr-...`），少算一个横线会得到「0 个 transcript」的假读数。（这是 claude kind 的
@@ -167,10 +232,34 @@ transcript 位置；其它 kind 的对应物没有记录。）
 蒸发，而画面上看不出区别（2026-08-27 06:18 实际发生过，见 §6「被重启过」）。**改变边界或叫停一类的
 指令，验收要落在行为上**（分支基点变了、那个文件不再被动了），不是落在画面上。
 
+### 别往有人在打字的输入框里发
+
+`agent prompt` 是往对方输入框里打字再按 Enter。**输入框里已经有人打了一半的字，你的消息会接在后面、和它一起
+提交。** 2026-10-13 实际发生过：一条消息被接在用户在 grill pane 里没写完的回答后面一起发了出去。（`pane send-text`
+也是往输入框里打字，同样会接在后面——这一点是按机制推断的，没单独测。）
+
+所以给可能有人在用的 pane 发消息前，先看输入框是不是空的：取 `pane read --source visible --format ansi` 里最后一行
+带 `❯` 的，**去掉暗色（`ESC[2m … ESC[0m`）片段**再看剩下的有没有字。暗色那段是 Claude Code 的灰字输入建议，不是
+谁打的字：2026-10-14 一个 worker 的输入框里显示「合并 PR 1007」，按纯文本读，coordinator 好几次让用户「按一下
+Enter」，用户指出那是建议、他根本没打过。**何时、怎么测的**：去掉暗色后，4 个显示着建议的 pane 都读成空。
+**还没见过的一侧**：真有人打了字时应当读成非空——没测过。**推翻条件**：Claude Code 改了建议的显示方式（不再
+用暗色），或真打的字也被读成空。
+
+`scripts/deliver-when-idle.sh "<消息>" <agent>...` 就是这么做的：等 agent 不在 working、输入框为空才发，每 15
+秒看一次，最多一小时。它的 `rc=0` 也只说明 `--wait` 看到了 working，送达仍按上面回读。
+
 ### 斜杠命令这样打是有效的
 
 2026-08-25 实测：经 `agent prompt` 打进输入框的 `/grill-with-docs` 会正常加载技能，即使它带
 `disable-model-invocation: true`（那条只挡模型自行加载，不挡人敲，而打进输入框等同人敲）。
+
+**内置命令也一样，包括给自己打。** 模型自己调不了 `/rename` 这类内置命令，但经 herdr 往一个 claude 的输入框里打
+（`pane send-text <pane> "/rename <名>"` 再 `send-keys Enter`），效果等于人敲，对自己的 pane 也行。**何时、怎么
+测的**：2026-10-21，Claude Code 2.1.306 + herdr 0.9.5。先在一个一次性 session 上测：空闲时发 `/rename`，立刻显示
+`Session renamed to: …`，peer 列表（`ListAgents`）马上变了；正在跑工具（`sleep 25`）时发，也是立刻生效，没有
+打断那一轮，也没有排到这一轮之后。再在一个 session 自己这一轮的工具调用里对自己的 pane 发，同样生效。
+**推翻条件**：发出去之后画面上没有 `Session renamed to`、peer 列表里名字不变；忙时发的进了排队、等这一轮结束
+才执行。受上面「别往有人在打字的输入框里发」约束。
 
 ### 指令里要引用技能时，先确认对方的 harness 找得到它
 
@@ -248,7 +337,8 @@ off=$(herdr pane get <p> | jq '.result.pane.scroll.offset_from_bottom')
 
 **上游：** 0.9.1 是写下时的最新正式版，之后两个 preview（09-21、09-28）的提交里没有改 `visible` 语义的；
 issue 列表里没有人报过「`visible` 跟随滚动位置」。文档对 `visible` 只写了「Current rendered screen」，
-按字面理解它这样做不算 bug，升级不会让它消失。
+按字面理解它这样做不算 bug，升级不会让它消失。2026-10-21 核过：0.9.2–0.9.5 的发布说明里也没有改 `visible`
+语义的条目；本机已是 0.9.5，**没在 0.9.5 上复测**。
 
 **什么观测会推翻本条：** `offset_from_bottom` 为 0 时 `visible` 仍然给出比 `recent` 旧的画面（那说明还有
 别的原因）；或者 pane 被滚上去时 `visible` 仍返回底部内容（说明 herdr 改了语义，先核 `herdr --version`）。
@@ -266,25 +356,30 @@ working 超过一小时，改成 `recent --lines 12` 才读对。那次同时把
 
 **对每个活着的 agent 读回滚佐证，不能只信 `agent_status`。**
 
-### 陷阱 ③a agy 的 `agent_status`：后台 shell 在跑就算 working，接口报错也算 working
+### 陷阱 ③a agy 的 `agent_status`：接口报错停住仍读作 working
 
-herdr 对 agy 没有生命周期 hook，状态只靠屏幕 manifest（herdr 0.9.1 文档「Agents」表：Antigravity CLI 的
-integration 只管会话恢复，不管状态，装了也不改变这一点）。当时生效的 manifest（`agy.toml`
-`2026.06.24.1`，`herdr agent explain --json` 报 `remote_update_status: current`，即上游最新）里有一条
-`background_tasks_working`：底部出现 `· N task` 就判 working。可是那个数字是**后台 shell 个数**，worker
-起着 dev server 就一直大于 0。
+herdr 对 agy 没有生命周期 hook，状态只靠屏幕 manifest（Antigravity CLI 的 integration 只管会话恢复，不管状态）。
+`herdr server agent-manifests` 列出当前生效的是哪个版本、是不是被本地覆盖了。
 
-2026-09-29 08:2x 实测：三个已做完、停在输入框等人的 agy worker（底部 `2 task(s)`，两个 dev server），
-`herdr agent explain` 全报 `working`，命中的正是这条规则。manifest 里也没有任何一条能认出
-`Internal error encountered`，所以接口报错停住的 agy 同样报 working（09-28/29 当夜三次）。
+**现行（2026-10-21 读 remote manifest `agy.toml` `2026.10.05.1` 的规则文本得出，herdr 0.9.5，未实跑复测）：**
+里面没有任何一条能认出 `⚠ Internal error encountered`（或 `The request contains invalid parameters`），所以
+接口报错停住的 agy 仍报 working——09-28/29 当夜三次。`agent_status`、`agent wait`、`events.subscribe` 的
+`pane.agent_status_changed`（以及 dispatch 的 `scan-workers.sh`）对这种停住都没反应。判 agy 是不是停住了，读
+`recent` 的底部：有没有 `esc to cancel`、输入框上方有没有那行报错。
+**推翻条件**：manifest 升了版本，且 `herdr agent explain` 对那种屏幕报非 working——那就删掉这一条。
 
-所以 agy 的 `agent_status`、`agent wait`、`events.subscribe` 的 `pane.agent_status_changed` 都会被这条
-规则带偏。判 agy 在不在干活，看底部有没有 `esc to cancel`，读法见 dispatch `patrol.md`「屏幕怎么判」。
+**被推翻的前半条（2026-09-29 写，2026-10-21 改）**：原先这里还写「后台 shell 在跑就算 working」。当时生效的
+manifest `2026.06.24.1` 有一条 `background_tasks_working`：底部出现 `· N task` 就判 working，而那个数字是**后台
+shell 个数**，起着 dev server 就恒大于 0；09-29 08:2x 三个停在输入框等人的 agy（底部 `2 task(s)`）`agent explain`
+全报 working。上游在 herdr **0.9.4**（「Antigravity … count as idle once they are back at their prompt, even if
+their own background tasks … are still running」，#3530）和 manifest `2026.10.05.1`（文件头：「Once the agent
+is back at its prompt they do not count as working」）修掉了。所以这半条只在用旧 herdr、或**本地覆盖文件挡住了
+新 manifest** 时还成立。
 
-**这是上游行为，能改的在上游**：herdr 支持本地覆盖 `~/.config/herdr/agent-detection/agy.toml`（覆盖永远
-优先），也可以给 herdr 报 issue。改之前先 `herdr agent explain --json` 看 manifest 版本有没有变。
-**推翻条件**：manifest 版本变了且 `explain` 对「空闲 + 后台 dev server」的 agy 报 `idle`、对接口报错报
-非 working——那就删掉这一条，并把 dispatch 看门脚本里自己的屏幕规则换成 herdr 的状态。
+**本地覆盖会挡住上游修复**：`~/.config/herdr/agent-detection/agy.toml` 永远优先于 remote。2026-09-29 有人为绕开
+上面那条写过一份；remote 升到 `2026.10.05.1` 后，`herdr server agent-manifests` 对 agy 报 `local override shadows
+cached remote rules`。看到这行就去比两份规则，上游已经覆盖的部分从覆盖文件里删掉（或删掉整个文件，再
+`herdr server reload-agent-manifests`），别让一份旧的变通写法一直压着上游。
 
 ### `herdr agent list` 只看得见 herdr 自己起的 agent
 
@@ -354,9 +449,7 @@ mtime 静止是因为它提交了（工作区变干净）；一份纯文档任�
   `git -C <worktree> log --oneline origin/main..HEAD` 查提交，交付物用你所用工作流的查法；不要信
   `agent_status`：herdr 把「做完退场」和「卡死」都报成 `idle`。
 
-给巡检脚本作者的提醒：新增脚本写完先 `bash -n` 校验，不要用 zsh 语法（如 `$var[...]`）写 bash 脚本
-—— 崩溃和真实告警在退出码上分不出来，有一轮已发生两次误报（一次数组下标语法崩溃、一次被自己的
-`pkill` 误杀，都被当成告警上报）。
+（原先这里有一段「给巡检脚本作者的提醒」，那是写巡检脚本的人的事，已挪到 dispatch 的 `patrol.md`。）
 
 ### 被 `claude --resume` 重启过：四个信号全正常，但事情没在推进
 
@@ -402,11 +495,25 @@ for p in $(pgrep -x agy); do printf '%s\t%s\n' "$p" "$(readlink /proc/$p/cwd)"; 
 
 ## 7 · 收工是三步，缺一步留壳
 
-```
-1. kill <pid>                             停 agent 进程
-2. git worktree remove <path> --force     删 git worktree
-3. herdr workspace close <ws_id>          关 herdr workspace   ← 必须显式做
-```
+三步是：停 agent 进程 → 删 git worktree → 关 herdr workspace（**必须显式做**）。第一步有两种做法，按情况选：
+
+| 情况 | 第一步 | 后两步 |
+|---|---|---|
+| **正常收工**：claude kind，活干完了、agent 空闲（例如它的 PR 已合并） | `scripts/retire.sh exit <名>`：发 `/exit`，等它从 `herdr agent list` 消失（最多 15 秒），没消失就退非零、别往下做 | `scripts/retire.sh remove <worktree>` |
+| **急停 / 卡住 / 非 claude kind / `/exit` 后还在列表里** | `kill <pid>`（§4：唯一实测可用的急停） | 同上，或手动 `git worktree remove --force` + `herdr workspace close` |
+
+为什么正常收工不直接 kill：`/exit` 让 Claude Code 自己退出、收好 transcript，退出之后它从 `herdr agent list`
+消失，这本身就是「进程停了」的判据，不用去找 pid。为什么急停不用 `/exit`：它是一条普通 prompt，对方正忙时会
+**排队**到这一轮跑完（陷阱 ②），打断不了任何东西。
+**`/exit` 这条路径的出处**：2026-10-21 dispatch 的收尾脚本先采用了「`/exit` → 等离开列表 → 删 worktree → 关
+workspace」；同日（Claude Code 2.1.306 + herdr 0.9.5）在一个一次性仓库的新 worktree 上跑了一遍 `launch.sh` →
+`deliver-when-idle.sh` → `retire.sh exit` → `retire.sh remove`：空闲的 agent 收到 `/exit` 后约 3 秒离开列表，
+worktree 删掉，workspace 关掉，列表里不再有它。只测了空闲时这一次。**推翻条件**：`/exit` 之后 agent 留在列表里
+（`retire.sh exit` 会报 ⚠）；或 herdr 改成 agent 退出后仍保留在列表里。
+
+`retire.sh remove` 按 `herdr workspace list` 里每个 workspace 的 `worktree.checkout_path` 找挂着这个 worktree 的那个
+（workspace 的标签是给人看的，可能被改过；`checkout_path` 是 herdr 自己记的路径），删 worktree，关 workspace，
+最后再看一遍列表。herdr 0.9.5 有 `herdr worktree remove`，它会不会连带关 workspace **没测过**，所以这里不用它。
 
 **不要假设哪一步会替你做另一步。** 2026-09-17/18 那一轮我清掉四个 worker 的进程与 worktree 之后，前
 三个的 workspace 从 `herdr workspace list` 里消失了，我据此推断「`worktree remove` 会连带关 workspace」
@@ -427,7 +534,7 @@ for p in $(pgrep -x agy); do printf '%s\t%s\n' "$p" "$(readlink /proc/$p/cwd)"; 
 | agy 1.2.12 | **发现 `~/.gemini/config/skills/<名>/SKILL.md`**（软链也行）；**不扫 `~/.agents/skills/`** | `.agents/skills/` | 2026-09-28，见下 |
 
 **所以用户级安装要链两处**：`~/.agents/skills/<名>`（Claude Code 经 `~/.claude/skills`、OpenCode）和
-`~/.gemini/config/skills/<名>`（agy）。`scripts/check-env.sh` 会列出三份技能在这两处各在不在。
+`~/.gemini/config/skills/<名>`（agy）。`scripts/check-env.sh` 会列出五份技能在这两处各在不在。
 
 **agy 这一行怎么测的**（2026-09-28，agy 1.2.12）：在 `~/.gemini/config/skills/<名>/SKILL.md` 放一个探针技能，
 在一个空目录里让 agy 列技能（明确要求不调用工具），列表里出现了它；把它换成**指向别处的软链**再测一次，照样

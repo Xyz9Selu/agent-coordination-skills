@@ -1,60 +1,84 @@
+**English** | [简体中文](README.zh-CN.md)
+
 # Agent coordination skills
 
-五个给「一个主 agent 指挥多个 coding agent 并行干活」用的技能。每条规则都带着当时怎么测出来的、以及什么观测会推翻它。
+Five skills for running **one coordinating agent that directs several coding agents working in parallel**.
+Every rule records how it was measured and which observation would overturn it.
 
-| 技能 | 管什么 | 依赖 | 能单独用吗 |
+| Skill | What it covers | Depends on | Standalone? |
 |---|---|---|---|
-| [`herdr-agents`](herdr-agents/SKILL.md) | 用 herdr 起 agent、确认就绪、可靠送达指令、回读、打断、agent 之间传话、判断死活/卡住/干完/被重启、收工 | herdr（以及官方 `herdr` 技能） | 能 |
-| [`github-backlog`](github-backlog/SKILL.md) | 用 GitHub Issues 管活：挑任务、认领、标签、PR 规范、验收 | `gh` | 能 |
-| [`dispatch`](dispatch/SKILL.md) | 调度员：按代码足迹分组防撞车、推荐给用户挑、派活、巡检 | **强依赖 `herdr-agents`**；任务系统可选 | 需要 `herdr-agents` |
-| [`todo-recorder`](todo-recorder/SKILL.md) | 记录：用户说需求，写进仓库根 `TODO.md`（或明确要求的 issue），从不实现 | 无 | 能 |
-| [`todo-executor`](todo-executor/SKILL.md) | 执行：扫 `TODO.md`，挑条目实现、打勾、提交，循环到没有为止 | 无 | 能 |
+| [`herdr-agents`](herdr-agents/SKILL.md) | Driving agents through herdr: start, confirm ready, deliver an instruction exactly once, read back, interrupt, pass messages between agents, tell alive / stuck / finished / restarted apart, wrap up | herdr (and the official `herdr` skill) | Yes |
+| [`github-backlog`](github-backlog/SKILL.md) | Managing work in GitHub Issues: pick tasks, claim them, labels, PR conventions, acceptance | `gh` | Yes |
+| [`dispatch`](dispatch/SKILL.md) | The coordinator: group work by code footprint to avoid collisions, recommend groups for the user to pick, launch workers, patrol | **`herdr-agents`** (required); a task system is optional | Needs `herdr-agents` |
+| [`todo-recorder`](todo-recorder/SKILL.md) | Record-only: the user states requirements, you write them to `TODO.md` at the repo root (or to an issue when explicitly asked). Never implements | None | Yes |
+| [`todo-executor`](todo-executor/SKILL.md) | Execute: scan `TODO.md`, pick items, implement, tick them off, commit, loop until none are left | None | Yes |
 
-`dispatch` 不认识 GitHub。它写清了自己需要「工作流」回答的问题（有哪些活、怎么占住、怎么交差、活对应哪个分支），没配工作流时退回到「用户在对话里给清单」。要用 GitHub 管活，就同时用 `dispatch` + `github-backlog`；后者的 [`for-dispatch.md`](github-backlog/for-dispatch.md) 是两者之间的对照。
+`dispatch`'s rules know nothing about GitHub. They state the questions a "workflow" must answer (what work exists,
+how to claim it, how to hand it in, which branch a task maps to). With no workflow configured it falls back to
+a list the user gives in conversation. To manage work on GitHub, use `dispatch` + `github-backlog` together;
+[`for-dispatch.md`](github-backlog/for-dispatch.md) in the latter maps one onto the other.
+Two of `dispatch`'s scripts do touch GitHub, and say so: `closeout.sh` calls `github-backlog`'s `close-merged.sh`
+(so it needs `gh` and the `github-backlog` skill installed next to it), and `scan-workers.sh` watches open PRs with
+`gh` (turn that off with `WATCH_PRS=0`).
 
-`todo-recorder` / `todo-executor` 是同一类「基于 `TODO.md` 的轻量任务流」，但比 `dispatch` + `github-backlog` 轻得多：不认领 Issue、不分组防撞车，只是「记下来」和「挨个做完」。两者可以配合 `github-backlog` 使用（`todo-recorder` 在用户明确要求时可以把条目路由到 issue），也可以完全不装 `github-backlog` 单独用。
+`todo-recorder` / `todo-executor` are a much lighter `TODO.md`-based flow than `dispatch` + `github-backlog`:
+no issue claiming, no collision grouping, just "write it down" and "do them one by one". They can be combined with
+`github-backlog` (`todo-recorder` can route entries to issues when explicitly asked) or used entirely on their own.
 
-## 脚本
+> **Language note:** `herdr-agents` and `dispatch` are currently written in Chinese; `github-backlog`,
+> `todo-recorder` and `todo-executor` are in English (with a few Chinese trigger phrases). Agents read either
+> fine, and translations of the Chinese skills are welcome.
 
-| 脚本 | 属于 | 干什么 | 写东西吗 |
+## Scripts
+
+| Script | Belongs to | What it does | Writes anything? |
 |---|---|---|---|
-| `herdr-agents/scripts/check-env.sh` | herdr-agents | 本机 herdr / claude / agy / opencode 版本 vs 技能里的实测版本；三份技能在 `~/.agents/skills/`、`~/.gemini/config/skills/` 各装没装 | 不写 |
-| `github-backlog/scripts/bootstrap.sh` | github-backlog | 检查 gh 与仓库；列出缺的标签，确认后才建（`--check` 只列） | 确认后建标签 |
-| `github-backlog/scripts/claim-issue.sh` | github-backlog | 认领、只读检查（`--check`）、`--self-test` | 认领时写 Issue |
-| `dispatch/scripts/scan-collisions.sh` | dispatch | 迁移号 / ADR 编号跨分支撞号扫描（`MIGRATION_DIR`、`ADR_DIR` 必须给） | 不写 |
-| `dispatch/scripts/watch-workers.sh` | dispatch | coordinator 的看门脚本：定时快照每个 worker 的进程 / 屏幕 / head / 交付物，值得叫醒时退出（`--once`、`--rebaseline`、`--stop`） | 只写自己的状态文件 |
+| `herdr-agents/scripts/check-env.sh` | herdr-agents | Compares local herdr / claude / agy / opencode versions with the versions the skills were measured against; reports whether the five skills are installed under `~/.agents/skills/` and `~/.gemini/config/skills/` | No |
+| `herdr-agents/scripts/launch.sh` | herdr-agents | Start a claude agent in a new worktree: wait until ready (answers the trust dialog), send one instruction, count deliveries (`DRY_RUN=1` prints only) | Creates a worktree, workspace and agent |
+| `herdr-agents/scripts/count-delivered.sh` | herdr-agents | Count how many times an instruction reached a claude agent's transcript | No |
+| `herdr-agents/scripts/deliver-when-idle.sh` | herdr-agents | Send a message once the agent is idle and its input box is empty | Sends the message |
+| `herdr-agents/scripts/retire.sh` | herdr-agents | Wrap up: `exit` (send `/exit`, wait until the agent is gone), `remove` (remove the worktree, close its workspace) | Removes the worktree, closes the workspace |
+| `github-backlog/scripts/bootstrap.sh` | github-backlog | Checks `gh` and the repo; lists missing labels and creates them only after confirmation (`--check` lists only) | Creates labels after confirmation |
+| `github-backlog/scripts/claim-issue.sh` | github-backlog | Claim an issue, read-only check (`--check`), `--self-test` | Writes the issue when claiming |
+| `github-backlog/scripts/close-merged.sh` | github-backlog | After merge: verify the PR landed, move its Issue `In review` → `Done` (`--check` verifies only) | Changes Issue labels |
+| `dispatch/scripts/scan-collisions.sh` | dispatch | Scans for migration / ADR number collisions across branches (`MIGRATION_DIR` and/or `ADR_DIR` required; `--prs` uses `gh`) | No |
+| `dispatch/scripts/test-scan-collisions.sh` | dispatch | Builds each collision case in a temporary repo and checks `scan-collisions.sh`'s output and exit code | Only in a temp dir |
+| `dispatch/scripts/scan-workers.sh` | dispatch | Patrol event stream for the Monitor tool: agents, PRs (`gh`), main moving, collisions, heartbeat | No (only `git fetch`) |
+| `dispatch/scripts/closeout.sh` | dispatch | After a PR merges, runs the cleanup in order: `close-merged.sh` → `retire.sh exit` → the project's `DROP_DB_CMD` → `retire.sh remove` → delete the local branch | Yes — labels, worktree, workspace, branch, and whatever `DROP_DB_CMD` does |
 
-`/dispatch bootstrap` = 跑 `check-env.sh`，再跑你所配工作流的 bootstrap（配 GitHub 就是 `bootstrap.sh`）。
+`/dispatch bootstrap` runs `check-env.sh`, then the bootstrap of the workflow you configured (for GitHub, `bootstrap.sh`).
 
-## 安装（用户级）
+## Install (user level)
 
 ```bash
 git clone https://github.com/Xyz9Selu/agent-coordination-skills.git ~/src/agent-coordination-skills
 mkdir -p ~/.agents/skills ~/.gemini/config/skills
 for s in herdr-agents github-backlog dispatch todo-recorder todo-executor; do
-  ln -s ~/src/agent-coordination-skills/$s ~/.agents/skills/$s          # Claude Code、OpenCode
+  ln -s ~/src/agent-coordination-skills/$s ~/.agents/skills/$s          # Claude Code, OpenCode
   ln -s ~/src/agent-coordination-skills/$s ~/.gemini/config/skills/$s   # agy
 done
-~/.agents/skills/herdr-agents/scripts/check-env.sh              # 核版本，并列出两处各装没装
+~/.agents/skills/herdr-agents/scripts/check-env.sh              # check versions, and which of the two locations have the skills
 ```
 
-**为什么要链两处**：各 harness 从哪里找用户级技能不一样（2026-09-28 实测，细节与推翻条件见 `herdr-agents` §8）：
+**Why two locations**: each harness looks for user-level skills in a different place (measured 2026-09-28; details and
+what would overturn it are in `herdr-agents` §8):
 
-| harness | 用户级技能目录 | 备注 |
+| Harness | User-level skills directory | Notes |
 |---|---|---|
-| Claude Code | `~/.claude/skills/` | 让 `~/.claude/skills` 指向 `~/.agents/skills`，或在其下再建软链 |
-| OpenCode 1.18.32 | `~/.agents/skills/` 与 `~/.claude/skills/` 都扫 | `opencode debug skill` 可查 |
-| agy 1.2.12 | `~/.gemini/config/skills/`（软链也行）；**不扫 `~/.agents/skills/`** | 在空目录里让 agy 列一次技能可复核 |
+| Claude Code | `~/.claude/skills/` | Point `~/.claude/skills` at `~/.agents/skills`, or add symlinks under it |
+| OpenCode 1.18.32 | scans both `~/.agents/skills/` and `~/.claude/skills/` | `opencode debug skill` shows what it found |
+| agy 1.2.12 | `~/.gemini/config/skills/` (symlinks work); **does not scan `~/.agents/skills/`** | Ask agy to list its skills once in an empty directory to double-check |
 
-agy 那一行的观测：探针技能放在 `~/.gemini/config/skills/<名>/SKILL.md`，在空目录里让 agy 列技能（明确要求不调用工具），
-列表里出现；换成指向别处的软链，照样出现；同一个探针放在 `~/.agents/skills/` 则不出现。**推翻条件**：agy 改了全局技能
-目录，或开始扫 `~/.agents/skills/`——那时只链 `~/.agents/skills/` 一处就够。
+The observation behind the agy row: a probe skill placed at `~/.gemini/config/skills/<name>/SKILL.md` showed up when
+agy was asked (with tools explicitly forbidden) to list its skills in an empty directory; replacing it with a symlink to
+elsewhere still showed up; the same probe in `~/.agents/skills/` did not. **What would overturn it**: agy changes its
+global skills directory or starts scanning `~/.agents/skills/` — then linking `~/.agents/skills/` alone is enough.
 
-Claude Code、OpenCode 对 `~/.agents/skills/<名> -> <别处>` 这种软链形状没测过。装完跑一次 `check-env.sh`，再用上表的方法
-各看一眼。
+Claude Code and OpenCode have not been tested with the `~/.agents/skills/<name> -> <elsewhere>` symlink shape. After
+installing, run `check-env.sh` once and check each harness using the table above.
 
-官方 `herdr` 技能要另外装：`herdr-agents` 只写它没写的东西。
+The official `herdr` skill must be installed separately: `herdr-agents` only documents what it leaves out.
 
-## 许可证
+## License
 
-MIT，见 [`LICENSE`](LICENSE)。
+MIT, see [`LICENSE`](LICENSE).

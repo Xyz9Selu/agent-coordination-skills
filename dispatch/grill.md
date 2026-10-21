@@ -12,11 +12,13 @@
 用户挑中之后：
 
 ```bash
-herdr worktree create --cwd <repo根> --branch grill/<议题短名> --base main \
+# 分支名不带阶段：issue/<N>-<短名>，grill 和实施同一条（见下文「grill 完在原分支继续做」）
+herdr worktree create --cwd <repo根> --branch issue/<N>-<短名> --base origin/main \
   --label "GRILL #<N> · <短名>"                       # 命名见 SKILL.md「命名与标记」
 herdr tab rename <tab_id> "GRILL #<N> · <短名>"
 herdr agent start grill-<N>-<短名> --kind claude --pane <root_pane> --timeout 60000 -- --model opus
 # 【必须】确认就绪再发 —— 按 herdr-agents §1（轮询 visible 到 banner，按掉信任对话框）
+# 这三步加送达计数也可以一条命令做：herdr-agents 的 scripts/launch.sh（MODEL=opus，指令文件里放这条斜杠命令）
 herdr agent prompt grill-<N>-<短名> '/grill-with-docs <这批活的号 + 你卡在哪个判断上>' \
   --wait --until working --timeout 12000
 # 报 agent_prompt_stalled ⇒ 重发；返回 OK ⇒ 什么都不能证明 —— 按 herdr-agents §2 回读 + 内容计数
@@ -31,8 +33,13 @@ herdr agent prompt grill-<N>-<短名> '/grill-with-docs <这批活的号 + 你�
 
 ## 八条硬约束，全部要写进给它的指令里
 
-1. **同一时刻只起一个 grill agent。** 用户是一个人，两个 grill agent 同时向他们发问，会被撕成两半 —— 这跟
-   「不微操」是同一个道理。
+1. **同一时刻最多两个 grill agent。** 两个同时在谈时，给每个的指令里写明「另一个 grill 在谈 X，用户的回复可能
+   隔一阵才来，不要催，不引用另一边还没定的结论」。超过两个先问用户。
+   **为什么从「只许一个」改成「最多两个」**：原文是「同一时刻只起一个 grill agent。用户是一个人，两个 grill agent
+   同时向他们发问，会被撕成两半 —— 这跟『不微操』是同一个道理」。2026-10-05 一个 grill 正在谈，coordinator 按原文
+   打算等它谈完再起第二个，用户否了：「直接安排吧。同时 grill 2 个是可以的。」用户在两个窗口之间切换得过来，
+   「撕成两半」是替用户做的推测，没有观测支撑。上限定在两个，是因为用户只说过两个。
+   **推翻条件**：用户说两个同时谈太乱，或改成别的上限。
 2. **给 grill agent 的那批活应当彼此相关。** 相关议题会互相澄清，一次谈完比分三次谈便宜。判据和分组一样：
    共享模块或共享概念。
 3. **它必须把结论写回工作流的追加记录**（Q3），而且按工作流的规矩办（例如不重写最初的描述）。这是闭环的
@@ -115,8 +122,17 @@ herdr agent prompt grill-<N>-<短名> '/grill-with-docs <这批活的号 + 你�
 
 1. **实施前必须占住。** grill 阶段不需要占住，一旦转入实施就需要——即使还是同一个 agent、同一条分支。
    2026-08-26 实跑：一批三件活在开始实施前都是「还没占」，也就是说盘面上没人知道这几件活正在被做，不占住
-   就是结构性隐形。分支名沿用 `grill/<议题>`、不改成 `fix/<N>`——**接受现状**，但占住记录里的分支名必须
-   与它一致（Q4），否则会被同伴当成过期的占住抢走。
+   就是结构性隐形。**分支名从开 grill 那一刻起就不带阶段：`issue/<N>-<短名>`**（例如 `issue/927-labor-spec-mapping`），grill 和
+   实施用的是同一条分支，占住记录里的分支名从头到尾不变。阶段只体现在 workspace / tab / agent 名上（`GRILL` → `WORKER`，
+   改名是一条命令）。命名本身以 `SKILL.md`「命名与标记」的表为准。*2026-10-13 用户定。为什么：同一条分支要从讨论
+   一直用到实施完，带 `grill/` 的名字在实施阶段名不副实；而分支改名代价高（为什么高、占住记录里的分支名为什么必须
+   和实际一致，归工作流说，GitHub 上见 `github-backlog` 的「The branch in the claim is the branch you work on」）。
+   推翻条件：分支改名不再影响别处，或 grill 不再在原分支接着实施。*
+   **旧说法（留着，免得有人加回去）**：「分支名沿用 `grill/<议题>`、不改成 `fix/<N>`——接受现状，但占住记录里的
+   分支名必须与它一致（Q4），否则会被同伴当成过期的占住抢走。」那是 2026-08-26 把 grill 和实施合并到同一条分支
+   时的权宜：分支已经叫 `grill/…`，改名代价高，于是接受现状并补一条一致性提醒。从一开始就用不带阶段的名字，这条
+   提醒要防的不一致就不会出现。
+
 2. **冲突复检不取消，只是提前。** 让 grill 交回来这条旧规矩，真实理由从来不是「上下文干净」（那只是次要
    好处），而是：**这件活的影响面刚刚才第一次变得可算，必须拿去和盘面上所有在飞的分支重新比一遍**——它当初
    进「需先 grill」桶正是因为算不出来，现在算得出了就必须做这一步，否则可能正好撞上某个已经在跑的 worker。

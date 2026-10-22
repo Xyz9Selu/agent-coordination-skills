@@ -241,7 +241,7 @@ revision id 与 ADR 编号」，迁移号「按 `revision = '…'` 那一行解�
   「先占者保号」。
 - 扫本机所有 worktree，别的会话留下的旧 worktree 刷满噪音（2026-10 前任 coordinator 只好在外面套
   `grep -v worktree-agent-`）。现在由调用方决定哪些 worktree 是在飞的。
-- 对每个 ref 把全部迁移文件逐个 `git show`，smart-manu-ops 上一次 34 秒、占满一个核；现在约 1 秒。
+- 对每个 ref 把全部迁移文件逐个 `git show`，作者的一个私有项目上一次 34 秒、占满一个核；现在约 1 秒。
 - 结尾提示「先占者保号」，和 patrol.md 的「先合并的保号」相反。
 
 ## #30 · 两次撞号事故与同号不同文件名的探针（2026-08-28）
@@ -302,4 +302,4 @@ revision id 与 ADR 编号」，迁移号「按 `revision = '…'` 那一行解�
 「coordinator」一并改成「幕僚长」，pane 标签、`/rename` 名跟着改。不留 `dispatch` 薄壳或别名。本文件里更早的条目
 保留当时的名字（dispatch / coordinator）。交接目录 `~/.local/state/dispatch/<仓库>/` 是本机已有的状态目录，不在这次改名范围内。
 
-补记（#4，2026-10-21 晚）：用户嫌 `chief-of-staff-smart-manu-ops` 太长、没人味，改成「名字 + - CoS of <项目简称>」，名字用普通、偏女性化的英文名；名字每个会话现取（本会话叫 Claire）。peer 列表里已有带空格的会话名、实测带空格和大小写的名字照样能当 SendMessage 地址，原先「全小写加连字符」的顾虑不成立。
+补记（#4，2026-10-21 晚）：用户嫌 `chief-of-staff-<仓库目录名>` 太长、没人味，改成「名字 + - CoS of <项目简称>」，名字用普通、偏女性化的英文名；名字每个会话现取（本会话叫 Claire）。peer 列表里已有带空格的会话名、实测带空格和大小写的名字照样能当 SendMessage 地址，原先「全小写加连字符」的顾虑不成立。

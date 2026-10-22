@@ -163,10 +163,10 @@ sends the prompt and Enter before reporting successful submission」），0.8.2 
 
 ## #9 · opencode 起在 worktree 里（2026-10-13）
 
-**何时、怎么测的：** OpenCode 1.18.34 + herdr 0.9.3，smart-manu-ops #957 的执行者对比：OpenCode（deepseek v4.1 flash）
-被起在 `~/.cache/smops-runs/runner-compare/`，在 `~/.herdr/worktrees/smart-manu-ops/cmp-ds` 里跑 26 条 e2e 要点，弹了
-7 次以上权限框（每次一个新子目录）；同时、同手册、同类目录布局的 Claude Code（Haiku，auto mode）0 次。前一天 #916 /
-#944 的 OpenCode 执行者同样起在运行目录、同样逐目录弹框。
+**何时、怎么测的：** OpenCode 1.18.34 + herdr 0.9.3，作者一个私有项目的 Issue 里的执行者对比：OpenCode（deepseek v4.1 flash）
+被起在 `<路径>/runner-compare/`，在 `<worktree 路径>/cmp-ds` 里跑 26 条 e2e 要点，弹了
+7 次以上权限框（每次一个新子目录）；同时、同手册、同类目录布局的 Claude Code（Haiku，auto mode）0 次。前一天另外两个 Issue 里
+的 OpenCode 执行者同样起在运行目录、同样逐目录弹框。
 
 **细节：** `Allow always` 只放行**那一个子目录**的 pattern（例如 `…/cmp-ds/frontend/tests/e2e/*`），读到
 `…/backend/app/services` 又问一遍；选 Allow always 后还会再弹一个「This will allow the following patterns until

@@ -428,6 +428,8 @@ for p in $(pgrep -x agy); do printf '%s\t%s\n' "$p" "$(readlink /proc/$p/cwd)"; 
 
 两处都链对 OpenCode 无实害，只多一条 `duplicate skill name` 警告，见 HISTORY #22；只链一处是为了干净。
 
+曾是「用户级安装要链两处：`~/.agents/skills` 与 `~/.gemini/config/skills`」，已改，见 HISTORY #22。
+
 曾是「agy 不发现用户级技能，派 agy 时指令里写技能的绝对路径」，已推翻，见 HISTORY #21。下一个看到「agy 找不到
 技能」的人，先查它是不是装进了 `~/.gemini/config/skills/`，别把绝对路径加回来。
 

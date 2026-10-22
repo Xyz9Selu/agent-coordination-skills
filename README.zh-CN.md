@@ -60,18 +60,22 @@
 
 ```bash
 git clone https://github.com/Xyz9Selu/agent-coordination-skills.git ~/src/agent-coordination-skills
-mkdir -p ~/.agents/skills ~/.claude/skills ~/.gemini/config/skills
-for s in herdr-agents github-backlog chief-of-staff todo-recorder todo-executor; do
-  ln -s ~/src/agent-coordination-skills/$s ~/.agents/skills/$s          # OpenCode（它扫这里和 ~/.claude/skills/）
-  ln -s ~/src/agent-coordination-skills/$s ~/.claude/skills/$s          # Claude Code（只扫 ~/.claude/skills/）
-  ln -s ~/src/agent-coordination-skills/$s ~/.gemini/config/skills/$s   # agy
-done
-~/.agents/skills/herdr-agents/scripts/check-env.sh              # 核版本，并列出各处装没装
+SKILLS="herdr-agents github-backlog chief-of-staff todo-recorder todo-executor"
+
+# 按你用的 harness 挑对应的行：
+mkdir -p ~/.claude/skills && for s in $SKILLS; do ln -s ~/src/agent-coordination-skills/$s ~/.claude/skills/$s; done          # Claude Code
+mkdir -p ~/.agents/skills && for s in $SKILLS; do ln -s ~/src/agent-coordination-skills/$s ~/.agents/skills/$s; done          # 只用 OpenCode
+mkdir -p ~/.gemini/config/skills && for s in $SKILLS; do ln -s ~/src/agent-coordination-skills/$s ~/.gemini/config/skills/$s; done  # agy
+
+~/src/agent-coordination-skills/herdr-agents/scripts/check-env.sh   # 核版本，并列出各处装没装
 ```
 
-如果 `~/.claude/skills` 本来就是指向 `~/.agents/skills` 的软链，Claude Code 那一行会对每个技能报 "File exists"。无害：技能在那里本来就看得到。
+- 只用 Claude Code：只跑 Claude Code 那行。
+- Claude Code **和** OpenCode 都用：只跑 Claude Code 那行。OpenCode 也会扫 `~/.claude/skills/`，再往 `~/.agents/skills/` 链一份，它会把每个技能列两遍。
+- 只用 OpenCode：跑 OpenCode 那行（跑 Claude Code 那行也行，两个目录它都扫）。
+- agy：另加 agy 那行；它不扫上面两个目录。
 
-**为什么要链几处**：各 harness 从哪里找用户级技能不一样（2026-09-28 实测，细节与推翻条件见 `herdr-agents` §8）：
+**为什么要分几处**：各 harness 从哪里找用户级技能不一样（2026-09-28 实测，细节与推翻条件见 `herdr-agents` §8）：
 
 | harness | 用户级技能目录 | 备注 |
 |---|---|---|

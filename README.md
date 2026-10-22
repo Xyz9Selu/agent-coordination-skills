@@ -82,19 +82,23 @@ For the lighter flow, skip herdr: tell the agent your requirements (`todo-record
 
 ```bash
 git clone https://github.com/Xyz9Selu/agent-coordination-skills.git ~/src/agent-coordination-skills
-mkdir -p ~/.agents/skills ~/.claude/skills ~/.gemini/config/skills
-for s in herdr-agents github-backlog chief-of-staff todo-recorder todo-executor; do
-  ln -s ~/src/agent-coordination-skills/$s ~/.agents/skills/$s          # OpenCode (it scans this and ~/.claude/skills/)
-  ln -s ~/src/agent-coordination-skills/$s ~/.claude/skills/$s          # Claude Code (scans only ~/.claude/skills/)
-  ln -s ~/src/agent-coordination-skills/$s ~/.gemini/config/skills/$s   # agy
-done
-~/.agents/skills/herdr-agents/scripts/check-env.sh              # check versions, and which of the locations have the skills
+SKILLS="herdr-agents github-backlog chief-of-staff todo-recorder todo-executor"
+
+# Pick the line(s) for the harness(es) you use:
+mkdir -p ~/.claude/skills && for s in $SKILLS; do ln -s ~/src/agent-coordination-skills/$s ~/.claude/skills/$s; done          # Claude Code
+mkdir -p ~/.agents/skills && for s in $SKILLS; do ln -s ~/src/agent-coordination-skills/$s ~/.agents/skills/$s; done          # OpenCode only
+mkdir -p ~/.gemini/config/skills && for s in $SKILLS; do ln -s ~/src/agent-coordination-skills/$s ~/.gemini/config/skills/$s; done  # agy
+
+~/src/agent-coordination-skills/herdr-agents/scripts/check-env.sh   # check versions, and which locations have the skills
 ```
 
-If `~/.claude/skills` is already a symlink to `~/.agents/skills`, the Claude Code line fails with "File exists" for each
-skill. That is harmless: the skills are already visible there.
+- Only Claude Code: run only the Claude Code line.
+- Claude Code **and** OpenCode: run only the Claude Code line. OpenCode scans `~/.claude/skills/` too, so a second
+  link under `~/.agents/skills/` would make it list every skill twice.
+- Only OpenCode: run the OpenCode line (or the Claude Code line; both directories are scanned).
+- agy: add the agy line; it does not scan the other two.
 
-**Why several locations**: each harness looks for user-level skills in a different place (measured 2026-09-28; details and
+**Why the locations differ**: each harness looks for user-level skills in a different place (measured 2026-09-28; details and
 what would overturn it are in `herdr-agents` §8):
 
 | Harness | User-level skills directory | Notes |

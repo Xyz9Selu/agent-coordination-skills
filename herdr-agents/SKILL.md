@@ -422,8 +422,11 @@ for p in $(pgrep -x agy); do printf '%s\t%s\n' "$p" "$(readlink /proc/$p/cwd)"; 
 
 怎么测的见 HISTORY #21。
 
-**所以用户级安装要链两处**：`~/.agents/skills/<名>`（Claude Code 经 `~/.claude/skills`、OpenCode）和
-`~/.gemini/config/skills/<名>`（agy）。`scripts/check-env.sh` 会列出五份技能在这两处各在不在。
+**所以用户级安装按 harness 各链一处**：Claude Code 链 `~/.claude/skills/<名>`，OpenCode 链 `~/.agents/skills/<名>`
+（或 `~/.claude/skills/<名>`，两个它都扫），agy 链 `~/.gemini/config/skills/<名>`。**同时用 Claude Code 和 OpenCode
+时只链 `~/.claude/skills`**。`scripts/check-env.sh` 会列出五份技能在各处在不在。
+
+两处都链对 OpenCode 无实害，只多一条 `duplicate skill name` 警告，见 HISTORY #22；只链一处是为了干净。
 
 曾是「agy 不发现用户级技能，派 agy 时指令里写技能的绝对路径」，已推翻，见 HISTORY #21。下一个看到「agy 找不到
 技能」的人，先查它是不是装进了 `~/.gemini/config/skills/`，别把绝对路径加回来。
@@ -432,6 +435,7 @@ for p in $(pgrep -x agy); do printf '%s\t%s\n' "$p" "$(readlink /proc/$p/cwd)"; 
 - agy 改了全局技能目录，或开始扫 `~/.agents/skills/` ⇒ 改 agy 那行和安装步骤。复核方法：安装后在空目录里让
   agy 列一次技能。
 - OpenCode 某版本的 `opencode debug skill` 不再列出 `~/.agents/skills/…` ⇒ 改 OpenCode 那行。
+- OpenCode 改了扫描目录或重名处理（报错、或同名列两份）⇒ 重测，并改上面「只链一处」的说法（HISTORY #22）。
 
 软链的用户级技能目录：agy 在 `~/.gemini/config/skills/` 下已测过软链可用；Claude Code、OpenCode 在
 `~/.agents/skills/<名> -> <别处>` 这种形状下**没测过**——装好之后用上表的方法各看一眼。

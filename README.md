@@ -30,6 +30,35 @@ no issue claiming, no collision grouping, just "write it down" and "do them one 
 > `todo-recorder` and `todo-executor` are in English (with a few Chinese trigger phrases). Agents read either
 > fine, and translations of the Chinese skills are welcome.
 
+## Requirements
+
+- **[herdr](https://herdr.dev)** ([source](https://github.com/herdrdev/herdr)): a terminal workspace manager that keeps
+  coding agents running in persistent panes and lets agents drive each other through a CLI. `herdr-agents` and
+  `chief-of-staff` are built on it; install it first (see its [install section](https://github.com/herdrdev/herdr#install)).
+  Measured against **0.9.5**.
+- **The official `herdr` skill**: shipped with herdr itself. If herdr is installed, `herdr --skill` prints the copy that
+  matches your binary (save it as `~/.agents/skills/herdr/SKILL.md`), or run `npx skills add herdrdev/herdr --skill herdr -g`;
+  see [herdr's agent-skill page](https://herdr.dev/docs/agent-skill/). `herdr-agents` tells the agent to read it first.
+- **`gh`** (GitHub CLI), logged in: needed by `github-backlog` and by the PR-watching parts of `chief-of-staff`. Measured
+  with **2.95.0**.
+- **At least one coding agent CLI** to run as a worker: **Claude Code** (measured with 2.1.306), **OpenCode** (1.18.32),
+  or **agy** (1.2.12). `check-env.sh` compares your versions with these; a different version only gets a notice.
+- **bash**, on **Linux and WSL2** (where everything was measured). macOS has not been tested; the scripts use `ps`, unix
+  sockets and GNU-style tools, so expect differences.
+
+## Quick start
+
+1. Install the requirements above, then the skills (next section).
+2. Start herdr, open a pane, and run your agent (e.g. `claude`) inside it, in a git repository you want to work on.
+   Skills that drive herdr only work inside a herdr pane (`HERDR_ENV=1`).
+3. Say: `/chief-of-staff bootstrap`. It runs `check-env.sh` and the bootstrap of your workflow (for GitHub Issues, it
+   lists missing labels and asks before creating them).
+4. Say: "Look at what work is open" (or give it a list). It groups tasks so their code does not collide and asks you to pick.
+5. Pick a group. It starts workers in separate worktrees, patrols them, and tells you when a PR is ready to review.
+
+For the lighter flow, skip herdr: tell the agent your requirements (`todo-recorder` writes them to `TODO.md`), then say
+"work through the TODO list" (`todo-executor`).
+
 ## Scripts
 
 | Script | Belongs to | What it does | Writes anything? |
@@ -53,15 +82,23 @@ no issue claiming, no collision grouping, just "write it down" and "do them one 
 
 ```bash
 git clone https://github.com/Xyz9Selu/agent-coordination-skills.git ~/src/agent-coordination-skills
-mkdir -p ~/.agents/skills ~/.gemini/config/skills
-for s in herdr-agents github-backlog chief-of-staff todo-recorder todo-executor; do
-  ln -s ~/src/agent-coordination-skills/$s ~/.agents/skills/$s          # Claude Code, OpenCode
-  ln -s ~/src/agent-coordination-skills/$s ~/.gemini/config/skills/$s   # agy
-done
-~/.agents/skills/herdr-agents/scripts/check-env.sh              # check versions, and which of the two locations have the skills
+SKILLS="herdr-agents github-backlog chief-of-staff todo-recorder todo-executor"
+
+# Pick the line(s) for the harness(es) you use:
+mkdir -p ~/.claude/skills && for s in $SKILLS; do ln -s ~/src/agent-coordination-skills/$s ~/.claude/skills/$s; done          # Claude Code
+mkdir -p ~/.agents/skills && for s in $SKILLS; do ln -s ~/src/agent-coordination-skills/$s ~/.agents/skills/$s; done          # OpenCode only
+mkdir -p ~/.gemini/config/skills && for s in $SKILLS; do ln -s ~/src/agent-coordination-skills/$s ~/.gemini/config/skills/$s; done  # agy
+
+~/src/agent-coordination-skills/herdr-agents/scripts/check-env.sh   # check versions, and which locations have the skills
 ```
 
-**Why two locations**: each harness looks for user-level skills in a different place (measured 2026-09-28; details and
+- Only Claude Code: run only the Claude Code line.
+- Claude Code **and** OpenCode: run only the Claude Code line. OpenCode scans `~/.claude/skills/` too, so a second
+  link under `~/.agents/skills/` would make it list every skill twice.
+- Only OpenCode: run the OpenCode line (or the Claude Code line; both directories are scanned).
+- agy: add the agy line; it does not scan the other two.
+
+**Why the locations differ**: each harness looks for user-level skills in a different place (measured 2026-09-28; details and
 what would overturn it are in `herdr-agents` §8):
 
 | Harness | User-level skills directory | Notes |
@@ -73,7 +110,8 @@ what would overturn it are in `herdr-agents` §8):
 Claude Code and OpenCode have not been tested with the `~/.agents/skills/<name> -> <elsewhere>` symlink shape. After
 installing, run `check-env.sh` once and check each harness using the table above.
 
-The official `herdr` skill must be installed separately: `herdr-agents` only documents what it leaves out.
+The official `herdr` skill must be installed separately: `herdr-agents` only documents what it leaves out. See
+[Requirements](#requirements) for where to get it.
 
 ## License
 

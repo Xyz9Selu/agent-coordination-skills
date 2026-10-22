@@ -153,7 +153,7 @@ herdr pane send-keys "$HERDR_PANE_ID" Enter
 然后用 harness 的 peer 列表核一下（Claude Code 是 `ListAgents`），首行要读到 `This session is <名字> - CoS of
 <项目简称>`。没读到就是没改成，在报告里说一句，不要当已改。
 
-名字的格式是用户定的：一个普通的、偏女性化的英文名，加「 - CoS of <项目简称>」（例如 `Claire - CoS of SMOPS`）。
+名字的格式是用户定的：一个普通的、偏女性化的英文名，加「 - CoS of <项目简称>」（例如 `Claire - CoS of Acme`）。
 每个会话开工时自己现起一个，告诉用户一声（用户定：每次都现取）。带空格和大小写
 都能当 `SendMessage` 的地址（实测可用）。曾是全小写加连字符的 `chief-of-staff-<仓库目录名>`，已改，见 HISTORY #4。
 
@@ -175,8 +175,8 @@ herdr pane send-keys "$HERDR_PANE_ID" Enter
 you work on」）。
 
 `<N>` 是这件活在工作流里的编号（没配工作流就用你给清单项编的号）。`<短名>` 用两三个连字符词概括那件事
-（`fx-rate-gate`、`leave-quota`），不要用任务标题原文。一批多个任务时用领头号加数量：
-`WORKER #155+2 · leave-quota`。
+（`login-retry`、`signup-form`），不要用任务标题原文。一批多个任务时用领头号加数量：
+`WORKER #42+2 · login-retry`。
 
 三条要点：
 
@@ -184,7 +184,7 @@ you work on」）。
   见 `herdr-agents` §1「名字」。所以标签给人看、agent 名给命令用。
 - **大写的 `WORKER` / `GRILL` / `CHIEF OF STAFF` 前缀是为了扫一眼就分得清类型**。三类 agent 干的事、能碰的
   东西、该被怎么对待完全不同，混在一列没有前缀的名字里认不出来。
-- **worker / grill 的 session 名不改，用 harness 生成的那个**（如 `fix-224-fx-missing-rate-gate-4c`），
+- **worker / grill 的 session 名不改，用 harness 生成的那个**（如 `fix-42-login-retry-4c`），
   它跟你起的 herdr 名不一样。所以报位置时**两个名字都要报**，否则用户按其中一个找不到另一个。要给 worker 也改，先问
   用户。曾是「session 层的名字你控制不了」，已推翻（`/rename` 能改），见 HISTORY #4。
 
@@ -448,10 +448,10 @@ worker 起在**它自己的 herdr workspace** 里。用户待在原来那个 wor
 每发出一张牌，报一行，四个坐标缺一不可：
 
 ```
-#224 → workspace w9「WORKER #224 · fx-rate-gate」· pane w9:p1
-       herdr agent 名 worker-224-fx-rate-gate
-       session 名 fix-224-fx-missing-rate-gate-4c
-       分支 issue/224-fx-rate-gate
+#42 → workspace w9「WORKER #42 · login-retry」· pane w9:p1
+       herdr agent 名 worker-42-login-retry
+       session 名 fix-42-login-retry-4c
+       分支 issue/42-login-retry
 ```
 
 **两个名字都要报** —— herdr 名是你起的，worker 的 session 名是 harness 自己生成的，我们不改它（见「命名与标记」）。

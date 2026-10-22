@@ -163,10 +163,10 @@ sends the prompt and Enter before reporting successful submission」），0.8.2 
 
 ## #9 · opencode 起在 worktree 里（2026-10-13）
 
-**何时、怎么测的：** OpenCode 1.18.34 + herdr 0.9.3，smart-manu-ops #957 的执行者对比：OpenCode（deepseek v4.1 flash）
-被起在 `~/.cache/smops-runs/runner-compare/`，在 `~/.herdr/worktrees/smart-manu-ops/cmp-ds` 里跑 26 条 e2e 要点，弹了
-7 次以上权限框（每次一个新子目录）；同时、同手册、同类目录布局的 Claude Code（Haiku，auto mode）0 次。前一天 #916 /
-#944 的 OpenCode 执行者同样起在运行目录、同样逐目录弹框。
+**何时、怎么测的：** OpenCode 1.18.34 + herdr 0.9.3，作者一个私有项目的 Issue 里的执行者对比：OpenCode（deepseek v4.1 flash）
+被起在 `<路径>/runner-compare/`，在 `<worktree 路径>/cmp-ds` 里跑 26 条 e2e 要点，弹了
+7 次以上权限框（每次一个新子目录）；同时、同手册、同类目录布局的 Claude Code（Haiku，auto mode）0 次。前一天另外两个 Issue 里
+的 OpenCode 执行者同样起在运行目录、同样逐目录弹框。
 
 **细节：** `Allow always` 只放行**那一个子目录**的 pattern（例如 `…/cmp-ds/frontend/tests/e2e/*`），读到
 `…/backend/app/services` 又问一遍；选 Allow always 后还会再弹一个「This will allow the following patterns until
@@ -282,3 +282,25 @@ remove`：空闲的 agent 收到 `/exit` 后约 3 秒离开列表，worktree 删
 **原文（已推翻）：** 同一天早些时候 agy 那一行写的是「agy **不发现**用户级技能」，推论是「派 agy 时，指令里写明要它读
 的技能的绝对路径」。当时只测了 `~/.agents/skills/`——那一半是对的——就把「这个目录不扫」推广成了「用户级都不扫」，没去
 查 agy 自己的全局技能目录。绝对路径那条变通因此作废：它会把一个装对位置就能消除的问题，固化成每条指令都要带的额外负担。
+
+## #22 · OpenCode 两处都链同一技能会怎样（2026-10-22，OpenCode 1.18.34）
+
+**对应正文：** SKILL.md §8「所以用户级安装按 harness 各链一处」。
+
+**怎么测的：** 隔离 HOME（`env -i HOME=<临时目录>`），一个测试技能 `demo-skill`，在空目录里跑 `opencode debug skill`
+看列出的 `location`；加 `--print-logs` 看日志。幕僚长 2026-10-22 08:54 SGT 测过一遍，worker 在临时 HOME 里复现，结果一致：
+
+| 摆法 | 列出几份 | 备注 |
+|---|---|---|
+| 只链 `~/.agents/skills` | 1 | |
+| 只链 `~/.claude/skills` | 1 | |
+| 两处都链同一个源 | 1，取 `~/.agents/skills` 那份 | 日志 `WARN message="duplicate skill name"` |
+| 两处放内容不同的两份 | 1，只出 `~/.agents/skills` 那份 | 另一份静默丢弃，只有那行 WARN |
+
+**结论：** 两处都链无实害，只多一条警告；README 改成「按 harness 挑一行」，同时用 Claude Code 和 OpenCode 只链
+`~/.claude/skills`，是为了干净，不是因为会出错。（「OpenCode 用户会看到每个技能两份」的担心不成立：列出来只有一份。）
+
+**推翻条件：** OpenCode 改了重名处理（报错，或列出两份）。
+
+**原文（已推翻）：** SKILL.md §8 曾写「用户级安装要链两处：`~/.agents/skills/<名>`（Claude Code 经 `~/.claude/skills`、
+OpenCode）和 `~/.gemini/config/skills/<名>`（agy）」，已改，见本条。

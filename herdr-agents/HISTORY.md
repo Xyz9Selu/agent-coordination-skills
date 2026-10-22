@@ -298,7 +298,7 @@ remove`：空闲的 agent 收到 `/exit` 后约 3 秒离开列表，worktree 删
 | 两处放内容不同的两份 | 1，只出 `~/.agents/skills` 那份 | 另一份静默丢弃，只有那行 WARN |
 
 **结论：** 两处都链无实害，只多一条警告；README 改成「按 harness 挑一行」，同时用 Claude Code 和 OpenCode 只链
-`~/.claude/skills`，是为了干净，不是因为会出错。（早先 #21 里「README 写每个技能会出现两份」的担心不成立：列出来只有一份。）
+`~/.claude/skills`，是为了干净，不是因为会出错。（「OpenCode 用户会看到每个技能两份」的担心不成立：列出来只有一份。）
 
 **推翻条件：** OpenCode 改了重名处理（报错，或列出两份）。
 

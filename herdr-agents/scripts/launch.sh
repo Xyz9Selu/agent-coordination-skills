@@ -39,8 +39,13 @@ if [ "${DRY_RUN:-}" = 1 ]; then
   exit 0
 fi
 git -C "$REPO" fetch -q "${BASE%%/*}" "${BASE#*/}"
+# herdr 的 `worktree create` 会把 worktree 归到主 checkout 的 workspace 下；没有这个 workspace 就替你建一个，且没有
+# 参数能关掉（SKILL.md §7）。建之前先看有没有，没有的话建完把新出现的那个记下来，retire.sh remove 凭这条记录收它。
+main=$(dirname "$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir)")
+had_root=$("$here/root-ws.sh" find "$main")
 r=$(herdr worktree create --cwd "$REPO" --branch "$branch" --base "$BASE" --label "$label") || { echo "worktree create failed: $r"; exit 1; }
 read -r pane tab ws wt < <(echo "$r" | python3 -c 'import json,sys;r=json.load(sys.stdin)["result"];print(r["root_pane"]["pane_id"],r["tab"]["tab_id"],r["workspace"]["workspace_id"],r["worktree"]["path"])')
+[ -n "$had_root" ] || "$here/root-ws.sh" record "$main"
 herdr tab rename "$tab" "$label" >/dev/null
 out=$(herdr agent start "$name" --kind claude --pane "$pane" --timeout 90000 -- --model "${MODEL:-sonnet}" 2>&1) \
   || { echo "agent start failed: $(head -c 400 <<<"$out")"; echo "left behind: wt=$wt ws=$ws pane=$pane"; exit 1; }

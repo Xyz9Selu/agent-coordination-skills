@@ -8,6 +8,7 @@
 #   retire.sh remove <worktree>    找挂着这个 worktree 的 workspace（按 `worktree.checkout_path`）→
 #                                  `git worktree remove --force` → `herdr workspace close` → 再看一遍
 #                                  `herdr workspace list`，还有 workspace 指着它就报 ⚠、退出 1。
+#                                  launch.sh 记过「起 worker 时 herdr 顺带建出来的主 checkout workspace」的话，满足判据再顺手关掉它。
 #   DRY_RUN=1                      只打印会做什么。
 #   REPO=<仓库>                    给了就只收这个仓库的 agent：exit 时 agent 的 cwd 不在 REPO 那个 git 仓库（主 checkout
 #                                  或它的 worktree）里，拒绝并退出 3。agent 名在整台机器上唯一、不分项目，自己的 worker
@@ -45,9 +46,12 @@ case "$cmd" in
     wt=$(cd "$arg" 2>/dev/null && pwd) || { echo "ℹ no worktree at $arg"; exit 0; }
     main=$(dirname "$(git -C "$wt" rev-parse --path-format=absolute --git-common-dir)") || exit 1
     ws=$(herdr workspace list | python3 -c 'import json,sys;wt=sys.argv[1];[print(w["workspace_id"]) for w in json.load(sys.stdin)["result"]["workspaces"] if (w.get("worktree") or {}).get("checkout_path")==wt]' "$wt")
-    if dry; then echo "git -C $main worktree remove --force $wt"; echo "herdr workspace close ${ws:-<none found>}"; exit 0; fi
+    here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+    if dry; then echo "git -C $main worktree remove --force $wt"; echo "herdr workspace close ${ws:-<none found>}"; "$here/root-ws.sh" reap "$main"; exit 0; fi
     git -C "$main" worktree remove --force "$wt" && echo "wt removed $wt" || { echo "⚠ git worktree remove $wt failed"; exit 1; }
     for w in $ws; do herdr workspace close "$w" >/dev/null 2>&1 && echo "ws closed $w" || echo "⚠ ws close $w failed"; done
+    # launch.sh 记过「起 worker 时 herdr 顺带建的主 checkout workspace」的话，满足判据才收（root-ws.sh；SKILL.md §7）
+    "$here/root-ws.sh" reap "$main"
     # 完成判据：没有 workspace 还挂着这个 worktree
     if herdr workspace list | grep -qF "\"$wt\""; then echo "⚠ a workspace still points at $wt"; exit 1; fi
     ;;

@@ -323,3 +323,26 @@ OpenCode）和 `~/.gemini/config/skills/<名>`（agy）」，已改，见本条�
 - `scripts/test-scripts.sh` 用假 herdr 覆盖上面几条。拿旧脚本跑是 6 败 5 过，新脚本 11 条全过。
 
 **推翻条件：** herdr 改成按 workspace 或项目分开命名。
+
+## #24 · 起 worker 顺带建出主 checkout workspace，收工没人收（2026-10-23，herdr 0.9.5）
+
+**观测：** 幕僚长用 `launch.sh` 给一个作者此前没开过 workspace 的仓库起 worker，`herdr worktree create` 建了 worker 的
+workspace，同时多出一个主 checkout 的 workspace（标签是仓库名、一个空闲 shell）。`retire.sh remove` 只关了 worker 的，
+主 checkout 的留在侧栏里。作者本来就开着主 workspace 的仓库没有这个现象。
+
+**上游：** 0.9.5 是当天最新的发布版。官方 CLI 文档写明 `worktree create`「groups it with the parent repo workspace」，是有意
+的分组，不是 bug；`--help`、文档和配置参考里都没有不建它的参数。另测了两条绕路（用一个临时仓库）：`git worktree add` +
+`herdr worktree open --path` 同样会建出主 workspace；`git worktree add` + `herdr workspace create --cwd <wt>` 不建，但
+得到的 workspace 没有 worktree 关联（`workspace list` 里没有 `worktree` 字段），丢了分组，`retire.sh` 也找不到它。所以
+在 herdr 一侧消除不了，写成适应。
+
+**判据为什么是「launch 时记录」：** 光看状态（只有一个空闲 shell）分不出作者自己开着的主 workspace，会误关。launch 前
+后对比 `workspace list`，才能确定「这个是我们引出来的」；收工时再叠加仍挂主 checkout、无别的 worker workspace、1 个
+pane、无 agent 在跑，防的是作者在里面干了活，或另一个 worker 还在用它。拿不准就留着并报出来。
+
+**改了什么：** 新增 `scripts/root-ws.sh`（find / record / reap）；`launch.sh` 建 worktree 前后调用 find / record；
+`retire.sh remove` 收完 worker 的 workspace 后调用 reap；`test-scripts.sh` 用假 herdr 覆盖「引出来的会关」「作者自己的
+不关」「还有别的 worker / 被加了 pane / agent 在跑 / id 指向别处则留着」。
+
+**推翻条件：** herdr 提供了不建主 checkout workspace 的参数（那时 launch 直接传它，删掉 root-ws.sh）。
+

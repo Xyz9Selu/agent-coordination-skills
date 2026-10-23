@@ -411,6 +411,14 @@ for p in $(pgrep -x agy); do printf '%s\t%s\n' "$p" "$(readlink /proc/$p/cwd)"; 
 （workspace 的标签是给人看的，可能被改过；`checkout_path` 是 herdr 自己记的路径），删 worktree，关 workspace，
 最后再看一遍列表。herdr 0.9.5 有 `herdr worktree remove`，它会不会连带关 workspace **没测过**，所以这里不用它。
 
+**起 worker 会顺带多出一个主 checkout 的 workspace，收工要收掉。** herdr 的 `worktree create` 把 worktree 归到主
+checkout 的 workspace 下，没有就替你建一个（空闲 shell，侧栏里的标签就是仓库名），没有参数或配置能关掉；`worktree open`
+同样，`workspace create` 则丢掉 worktree 关联，所以只能收工时处理。`launch.sh` 在建之前看一眼有没有，没有就把新出现的
+那个记进 `<git-common-dir>/herdr-agents-root-ws`；`retire.sh remove` 对记录里的每一个，满足全部判据才关：还挂着主
+checkout、同仓库没有别的 worker workspace 还开着、只有 1 个 pane、没有 agent 在 working/blocked；不满足就留着并打 ℹ。
+作者自己开的主 workspace 从不进记录，所以不会被关。**推翻条件**：herdr 提供了不建它的参数，或收工后 `herdr workspace list`
+里仍留着起 worker 时多出的主 checkout workspace（`retire.sh` 没打 ℹ）。来历见 HISTORY #24。
+
 **不要假设哪一步会替你做另一步。** 曾是「`worktree remove` 会连带关 workspace」，已推翻（那几个是用户手动关的），
 见 HISTORY #20。`worktree remove` 到底会不会连带关，至今没有观测过。
 

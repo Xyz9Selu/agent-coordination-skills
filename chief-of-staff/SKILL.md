@@ -64,20 +64,40 @@ description: Use when acting as the user's chief of staff (幕僚长 / coordinat
 每次报牌、每轮巡检都把这份记录原样贴给用户，让它至少活在对话里；地面事实（worktree、分支、进程）仍然
 每轮现查，不信记录。
 
-## 同一时刻只能有一个幕僚长
+## 同一项目只能有一个幕僚长
 
-两个幕僚长会从同一个池子发牌，且互相看不见对方发出去、还没被占住的牌 —— 这会精确重现本技能要
-消灭的那个 bug。
+两个幕僚长从同一个看板发牌，互相看不见对方发出去、还没被占住的牌 —— 这会精确重现本技能要消灭的那个 bug。
+不同项目的幕僚长不共用看板，可以在同一台机器上同时跑（和它们怎么相处，见下一节）。
 
-**开工前先确认自己是唯一的：**
+**两个幕僚长算同一个项目，只要下面任一条成立：**
 
-```bash
-herdr agent list   # 看有没有别的 pane 在跑幕僚长
-```
+- 站在同一个 git 仓库里：`git rev-parse --git-common-dir` 相同（主 checkout 和它的 worktree 都算）；
+- 从同一个看板发牌：工作流的任务来源相同（例如两份 clone 指着同一个 GitHub 仓库）。
 
-再用 harness 的 peer 列表（Claude Code 是 `ListAgents`）扫一遍 peer session 名——herdr 只看得见它自己起
-的 agent（`herdr-agents` §3）。发现另一个幕僚长在跑 —— **停下来告诉用户，不要开始发牌**。宁可
-不发，也不要两个人发。
+标题里的「CoS of <项目简称>」**不是判据**：简称是随手起的，会重名，也会改。判不出来（例如 peer 列表里有个幕僚长，
+看不到它站在哪个目录）就当同一个项目。
+
+**开工前确认本项目只有你一个**，怎么查你自己定。注意 herdr 只看得见它自己起的 agent，后台作业形态的 session 要
+靠 harness 的 peer 列表（`herdr-agents` §3）。发现同项目的另一个幕僚长 —— **停下来告诉用户，不要开始发牌**。宁可
+不发，也不要两个人发。挂着 `scan-workers.sh` 时，它在本项目里看到另一个「- CoS of」pane 会报 `COS-DUPLICATE`，
+照这里处理。
+
+推翻条件：工作流的占住协议能单独拦住「发了还没占」那段空档（两个幕僚长发同一张牌时，后发的那个一定失败）。
+曾是「同一时刻整台机器只能有一个幕僚长」，已改，见 HISTORY #38。
+
+## 和别的项目共用一台机器
+
+目标：几个项目的幕僚长在同一台机器上各干各的，互不干扰。herdr 的 agent 列表、peer 列表、机器负载都是整台机器
+共用的，读到别的项目的东西只当背景。不能越过的边界：
+
+- **别的项目的 agent、worktree、分支都不归你**：不巡检、不给它们发话、不叫停、不收。判别用上一节的判据。
+  `scan-workers.sh` 只报本项目的 agent；`closeout.sh` 不收不在本仓库里的 agent。
+- **herdr 的 agent 名在整台机器上唯一**，所以 worker 名要带项目码（见「命名与标记」）。
+- **CPU 核是共用的**：起新 worker、或让 worker 跑全量测试 / 构建之前，看整机负载，不只看自己的 worker 数。负载
+  高时先等，或者告诉用户；要别的项目让一让，就经用户去说，或者对那个项目的幕僚长说，不要自己去动它的 agent。
+  `scan-workers.sh` 会报 `LOAD-HIGH` / `LOAD-OK`，心跳里也带着负载。
+
+推翻条件：herdr 的 agent 名按项目或 workspace 分开命名（那时可以去掉项目码）。来历见 HISTORY #38。
 
 ## 交接 —— 换会话时的交接文件
 
@@ -165,8 +185,8 @@ herdr pane send-keys "$HERDR_PANE_ID" Enter
 
 | 层 | 命令 | worker | grill agent |
 |---|---|---|---|
-| herdr agent 名 | `agent start <名>` | `worker-<N>-<短名>` | `grill-<N>-<短名>` |
-| workspace 标签 | `worktree create --label` | `WORKER #<N> · <短名>` | `GRILL #<N> · <短名>` |
+| herdr agent 名 | `agent start <名>` | `worker-<项目码>-<N>-<短名>` | `grill-<项目码>-<N>-<短名>` |
+| workspace 标签 | `worktree create --label` | `WORKER <项目码>#<N> · <短名>` | `GRILL <项目码>#<N> · <短名>` |
 | tab 标签 | `tab rename <tab_id>` | 同 workspace 标签 | 同 workspace 标签 |
 | git 分支名 | `worktree create --branch` | `issue/<N>-<短名>` | `issue/<N>-<短名>`（**同一条**，转实施不换、不改名；见 `grill.md`「grill 完在原分支继续做」） |
 
@@ -176,10 +196,13 @@ you work on」）。
 
 `<N>` 是这件活在工作流里的编号（没配工作流就用你给清单项编的号）。`<短名>` 用两三个连字符词概括那件事
 （`login-retry`、`signup-form`），不要用任务标题原文。一批多个任务时用领头号加数量：
-`WORKER #42+2 · login-retry`。
+`WORKER acme#42+2 · login-retry`。`<项目码>` 是两到五个小写字母，同一项目每次都用同一个（例如项目简称的小写缩写）：
+不同项目的编号会重叠，而 herdr 的 agent 名在整台机器上唯一。曾是不带项目码的 `worker-<N>-<短名>`，已改，见 HISTORY #38。
 
-三条要点：
+四条要点：
 
+- **agent 名最长 32 个字符**，超了 herdr 直接拒。超长时缩短 `<短名>`，不要去掉项目码或编号。`launch.sh` 在建
+  worktree 之前就检查长度和重名，拒了会说出原因。
 - **agent 名必须全小写**——这是 herdr 自己的校验，不是风格偏好；标签则可以带空格、`#`、`·`、中文。细节
   见 `herdr-agents` §1「名字」。所以标签给人看、agent 名给命令用。
 - **大写的 `WORKER` / `GRILL` / `CHIEF OF STAFF` 前缀是为了扫一眼就分得清类型**。三类 agent 干的事、能碰的
@@ -389,17 +412,17 @@ claude kind 的 ①–③ 是 `herdr-agents` 的 `scripts/launch.sh`（`REPO=<�
 ```bash
 # ① 建隔离工作区（连带建好 workspace + tab + 已 cd 的 pane）
 herdr worktree create --cwd <repo根> --branch <分支名> --base origin/main \
-  --label "WORKER #<N> · <短名>"                      # 命名见「命名与标记」
+  --label "WORKER <项目码>#<N> · <短名>"              # 命名见「命名与标记」
 #    → 从返回 JSON 取 result.root_pane.pane_id 与 result.tab.tab_id
 #    --base 一律用 fetch 之后的 origin/main，不用本地 main（本地 main 常落后，见 HISTORY #11）。
 #    launch.sh 的 BASE 默认就是 origin/main，并先 fetch。
 
 # ①a 给 tab 也贴同一个标签，用户扫一眼就知道这是谁
-herdr tab rename <tab_id> "WORKER #<N> · <短名>"
+herdr tab rename <tab_id> "WORKER <项目码>#<N> · <短名>"
 ```
 
 ② **起 agent 并确认就绪** —— 按 `herdr-agents` §1（claude kind 的特征串和信任框见那里）。agent 名
-`worker-<N>-<短名>`，模型按上面的档位。完成判据是那一节的：轮询因匹配到 banner 而结束。
+`worker-<项目码>-<N>-<短名>`，模型按上面的档位。完成判据是那一节的：轮询因匹配到 banner 而结束。
 
 ③ **发任务，确认送达且只送达一次** —— 按 `herdr-agents` §2：`--wait` 的 `OK` 什么都不证明；回读看到
 指令落在 banner 之后；transcript 里那句独特的话恰好 1 次。
@@ -448,8 +471,8 @@ worker 起在**它自己的 herdr workspace** 里。用户待在原来那个 wor
 每发出一张牌，报一行，四个坐标缺一不可：
 
 ```
-#42 → workspace w9「WORKER #42 · login-retry」· pane w9:p1
-       herdr agent 名 worker-42-login-retry
+#42 → workspace w9「WORKER acme#42 · login-retry」· pane w9:p1
+       herdr agent 名 worker-acme-42-login-retry
        session 名 fix-42-login-retry-4c
        分支 issue/42-login-retry
 ```
@@ -466,8 +489,8 @@ worker 起在**它自己的 herdr workspace** 里。用户待在原来那个 wor
 纯观察模式（用户一组都没选）下，这是你**唯一**要做的事。每一轮都要过完 [`patrol.md`](patrol.md) 里的
 每一项——**开始第一轮巡检前先读它**。骨架：
 
-- **死活与状态**：`herdr agent list` + 对每个活着的 agent 读回滚佐证 + 比 pid 查重启，按 `herdr-agents`
-  §3、§6。判「停摆」必须四个信号全真。
+- **死活与状态**：`herdr agent list`（只看本项目的）+ 对每个活着的 agent 读回滚佐证 + 比 pid 查重启，按
+  `herdr-agents` §3、§6。判「停摆」必须四个信号全真。
 - **事件流**：用 Monitor 挂 `scripts/scan-workers.sh`，有变化才叫醒你，另有 5 分钟一次的心跳；用法与每种事件怎么
   反应见它的文件头和 `patrol.md`「事件流」。worker 叫不醒你；没挂上就每次回复说明「现在没有自动巡检」。它对
   agy 接口报错停住（只报成 idle）、被滚上去的 pane 看不清，见同一节「它看不清的东西」。

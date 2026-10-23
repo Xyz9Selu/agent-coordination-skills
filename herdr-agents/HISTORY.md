@@ -304,3 +304,22 @@ remove`：空闲的 agent 收到 `/exit` 后约 3 秒离开列表，worktree 删
 
 **原文（已推翻）：** SKILL.md §8 曾写「用户级安装要链两处：`~/.agents/skills/<名>`（Claude Code 经 `~/.claude/skills`、
 OpenCode）和 `~/.gemini/config/skills/<名>`（agy）」，已改，见本条。
+
+## #23 · agent 名在整台机器上唯一；`launch.sh` 吞掉了报错（2026-10-23，herdr 0.9.5）
+
+**观测：** 两个项目在同一台机器上各起 agent。按 Issue 号起的名字一重叠，`agent start` 就返回
+`{"error":{"code":"agent_name_taken","message":"agent name <名> is already used; candidates: … cwd=<另一个项目> …"}}`，
+退出码 1。名字超过 32 个字符时返回 `invalid_agent_name`。旧的 `launch.sh` 把 `agent start` 的输出丢进 `/dev/null`，
+然后在就绪循环里空等 60 秒，只报 `NOT READY`，看不出真正的原因。
+
+**上游：** 0.9.5 是当天最新的发布版。名字的格式和全机唯一都是有意做的校验（报错文案就写着规则），不是 bug，所以写成适应。
+
+**改了什么：**
+
+- `launch.sh` 在建 worktree 之前先查格式和重名，免得留下一个没人用的 worktree。`agent start` 失败时把 herdr 的报错原样
+  打出来，并说明留下了哪个 worktree / pane。
+- `retire.sh exit` 加了可选的 `REPO` 护栏：同名 agent 的 cwd 不在 `REPO` 那个 git 仓库里，就不发 `/exit`，退出码 3。
+  只凭名字收工的话，自己的 agent 已经退出、别的项目又恰好有同名 agent 时，会收错人。
+- `scripts/test-scripts.sh` 用假 herdr 覆盖上面几条。拿旧脚本跑是 6 败 5 过，新脚本 11 条全过。
+
+**推翻条件：** herdr 改成按 workspace 或项目分开命名。

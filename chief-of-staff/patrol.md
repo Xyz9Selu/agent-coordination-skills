@@ -6,8 +6,9 @@
 ## 事件流：`scripts/scan-workers.sh`
 
 下面「死活、状态」「撞号」两节里能机械判的部分，由 `scan-workers.sh` 每 90 秒看一遍、有变化才出一行事件（agent
-新增 / 消失 / 状态变化 / 权限框、PR 新开 / 转正 / 合并、main 前进、撞号变化、探测失败），另每 5 分钟一行心跳。用
-Monitor 挂上它（`timeout_ms: 1800000`，到期再挂）：
+新增 / 消失 / 状态变化 / 权限框、PR 新开 / 转正 / 合并、main 前进、撞号变化、同项目另一个幕僚长、整机负载越线、
+探测失败），另每 5 分钟一行心跳。它只报**本项目**的 agent，别的项目的只在快照和心跳里计个数（见 `SKILL.md`「和别的项目
+共用一台机器」）。用 Monitor 挂上它（`timeout_ms: 1800000`，到期再挂）：
 
 ```bash
 REPO=<仓库> MIGRATION_DIR=<迁移目录> ADR_DIR=<ADR 目录> scripts/scan-workers.sh
@@ -53,7 +54,8 @@ Claude Code 的跨 session 消息会被扣留、超时静默丢弃（`herdr-agen
 
 ## 死活、状态、有没有被重启
 
-- `herdr agent list` —— worker 退出后会**从列表里消失**，pane 变 `unknown`。死活可判。
+- `herdr agent list` —— worker 退出后会**从列表里消失**，pane 变 `unknown`。死活可判。列表是整台机器的，只看
+  cwd 在本仓库（或它的 worktree）里的那些。
 - **对每个活着的 worker 读回滚佐证**，不能只信 `agent_status`（`herdr-agents` §3 陷阱 ③）。
 - **判定「停摆」前四个信号必须全部为真**（transcript 静止、文件 mtime 静止、无存活子进程、分支上没有未合并
   提交也没有已开的交付物）——为什么少一个都会误报、以及实测的两次误报，见 `herdr-agents` §6。交付物那一项

@@ -9,6 +9,9 @@
 #                                  `git worktree remove --force` → `herdr workspace close` → 再看一遍
 #                                  `herdr workspace list`，还有 workspace 指着它就报 ⚠、退出 1。
 #   DRY_RUN=1                      只打印会做什么。
+#   REPO=<仓库>                    给了就只收这个仓库的 agent：exit 时 agent 的 cwd 不在 REPO 那个 git 仓库（主 checkout
+#                                  或它的 worktree）里，拒绝并退出 3。agent 名在整台机器上唯一、不分项目，自己的 worker
+#                                  已经走了而别的项目恰好有同名 agent 时，只凭名字会收错人（见 HISTORY #23）。
 #
 # 只适用于 claude kind 且 agent 空闲时（`/exit` 是 Claude Code 的斜杠命令）；agent 卡住、正忙、或不是 claude
 # 时走 §7 的 kill 路径。为什么分两条路径见 §7。
@@ -25,6 +28,14 @@ case "$cmd" in
   exit)
     if dry; then echo "herdr agent prompt $arg /exit; wait until $arg leaves herdr agent list (15s)"; exit 0; fi
     in_list "$arg" || { echo "agent $arg not in herdr agent list (already gone)"; exit 0; }
+    if [ -n "${REPO:-}" ]; then
+      cwd=$(herdr agent list 2>/dev/null | python3 -c 'import json,sys;[print(a.get("cwd") or "") for a in json.load(sys.stdin)["result"]["agents"] if a.get("name")==sys.argv[1]]' "$arg" | head -1)
+      want=$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+      got=$( [ -n "$cwd" ] && git -C "$cwd" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+      if [ -z "$want" ] || [ "$got" != "$want" ]; then
+        echo "⚠ agent $arg is not in $REPO (cwd: ${cwd:-?}) — not touching another project's agent"; exit 3
+      fi
+    fi
     herdr agent prompt "$arg" "/exit" >/dev/null 2>&1
     for i in $(seq 1 15); do in_list "$arg" || break; sleep 1; done
     if in_list "$arg"; then echo "⚠ agent $arg still in herdr agent list"; exit 1; fi

@@ -11,6 +11,9 @@
 #   最后一行：<name> ws=… pane=… wt=… delivered=<次数>。delivered 不是 1 就照 SKILL.md §2 处理（0 = 没送达，
 #   ≥2 = 重复送达）。只支持 claude kind（数送达读的是 Claude Code 的 transcript）。
 #
+# 名字：herdr 的 agent 名在整台机器上唯一（不分项目），且限 `[a-z][a-z0-9_-]{0,31}`。建 worktree 之前先查这两条，
+# 免得留下一个没人用的 worktree；`agent start` 自己报的错原样打出来，不吞成 NOT READY（见 HISTORY #23）。
+#
 # 就绪判据与信任框：见 SKILL.md §1「claude kind」（特征串 `Claude Code v`；信任框默认选中「No, exit」，
 # 读 ❯ 那一行，不在「Yes」上就按 down，在了才按 Enter）。框的文案或顺序变了，就绪循环会跑满 60 次、报
 # NOT READY，不会误按。
@@ -22,6 +25,11 @@ BASE=${BASE:-origin/main}
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 [ -f "$pf" ] || { echo "no prompt file: $pf"; exit 1; }
 grep -qF -- "$token" "$pf" || { echo "token $token not in $pf — delivery could not be counted"; exit 1; }
+[[ "$name" =~ ^[a-z][a-z0-9_-]{0,31}$ ]] || { echo "invalid agent name '$name' (${#name} chars): herdr wants [a-z][a-z0-9_-]{0,31}"; exit 1; }
+if holder=$(herdr agent list 2>/dev/null | python3 -c 'import json,sys;[print("pane",a.get("pane_id")+",","cwd",a.get("cwd")) for a in json.load(sys.stdin)["result"]["agents"] if a.get("name")==sys.argv[1]]' "$name") \
+   && [ -n "$holder" ]; then
+  echo "agent name $name is already taken (held by $holder) — herdr names are machine-wide; pick another"; exit 1
+fi
 if [ "${DRY_RUN:-}" = 1 ]; then
   echo "git -C $REPO fetch -q ${BASE%%/*} ${BASE#*/}"
   echo "herdr worktree create --cwd $REPO --branch $branch --base $BASE --label \"$label\""
@@ -34,7 +42,8 @@ git -C "$REPO" fetch -q "${BASE%%/*}" "${BASE#*/}"
 r=$(herdr worktree create --cwd "$REPO" --branch "$branch" --base "$BASE" --label "$label") || { echo "worktree create failed: $r"; exit 1; }
 read -r pane tab ws wt < <(echo "$r" | python3 -c 'import json,sys;r=json.load(sys.stdin)["result"];print(r["root_pane"]["pane_id"],r["tab"]["tab_id"],r["workspace"]["workspace_id"],r["worktree"]["path"])')
 herdr tab rename "$tab" "$label" >/dev/null
-herdr agent start "$name" --kind claude --pane "$pane" --timeout 90000 -- --model "${MODEL:-sonnet}" >/dev/null
+out=$(herdr agent start "$name" --kind claude --pane "$pane" --timeout 90000 -- --model "${MODEL:-sonnet}" 2>&1) \
+  || { echo "agent start failed: $(head -c 400 <<<"$out")"; echo "left behind: wt=$wt ws=$ws pane=$pane"; exit 1; }
 ready=0
 for i in $(seq 1 60); do
   scr=$(herdr pane read "$pane" --source visible)

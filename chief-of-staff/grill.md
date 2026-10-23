@@ -14,12 +14,12 @@
 ```bash
 # 分支名不带阶段：issue/<N>-<短名>，grill 和实施同一条（见下文「grill 完在原分支继续做」）
 herdr worktree create --cwd <repo根> --branch issue/<N>-<短名> --base origin/main \
-  --label "GRILL #<N> · <短名>"                       # 命名见 SKILL.md「命名与标记」
-herdr tab rename <tab_id> "GRILL #<N> · <短名>"
-herdr agent start grill-<N>-<短名> --kind claude --pane <root_pane> --timeout 60000 -- --model opus
+  --label "GRILL <项目码>#<N> · <短名>"                       # 命名见 SKILL.md「命名与标记」
+herdr tab rename <tab_id> "GRILL <项目码>#<N> · <短名>"
+herdr agent start grill-<项目码>-<N>-<短名> --kind claude --pane <root_pane> --timeout 60000 -- --model opus
 # 【必须】确认就绪再发 —— 按 herdr-agents §1（轮询 visible 到 banner，按掉信任对话框）
 # 这三步加送达计数也可以一条命令做：herdr-agents 的 scripts/launch.sh（MODEL=opus，指令文件里放这条斜杠命令）
-herdr agent prompt grill-<N>-<短名> '/grill-with-docs <这批活的号 + 你卡在哪个判断上>' \
+herdr agent prompt grill-<项目码>-<N>-<短名> '/grill-with-docs <这批活的号 + 你卡在哪个判断上>' \
   --wait --until working --timeout 12000
 # 报 agent_prompt_stalled ⇒ 重发；返回 OK ⇒ 什么都不能证明 —— 按 herdr-agents §2 回读 + 内容计数
 ```
@@ -107,7 +107,7 @@ herdr agent prompt grill-<N>-<短名> '/grill-with-docs <这批活的号 + 你�
 照旧执行，只有后者才允许停下。
 
 角色从 grill 变成 worker，三处标签要跟着改，否则盘面上仍显示为 GRILL：workspace 标签、tab 标签从
-`GRILL #…` 改成 `WORKER #…`，agent 名同步改（`herdr agent rename`）。
+`GRILL <项目码>#…` 改成 `WORKER <项目码>#…`，agent 名同步改（`herdr agent rename`）。
 
 所以第 3 条硬约束（结论写回工作流的追加记录）不是流程规定，是**承重墙**：下一个 agent（无论是原 agent 转正
 后的自己，还是万一它死掉之后重新派来的人）能否只凭那段记录把活干下来，就是「grill 是否真的谈透了」的检验。

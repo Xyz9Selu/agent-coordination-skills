@@ -45,13 +45,15 @@
 | `herdr-agents/scripts/launch.sh` | herdr-agents | 在新 worktree 里起 claude：等就绪（按掉信任框）、发一次指令、数送达次数（`DRY_RUN=1` 只打印） | 建 worktree、workspace、agent |
 | `herdr-agents/scripts/count-delivered.sh` | herdr-agents | 数一条指令在 claude 的 transcript 里送达了几次 | 不写 |
 | `herdr-agents/scripts/deliver-when-idle.sh` | herdr-agents | 等 agent 空闲、输入框为空再发消息 | 发消息 |
-| `herdr-agents/scripts/retire.sh` | herdr-agents | 收工：`exit`（发 `/exit`、等它离开列表）、`remove`（删 worktree、关它的 workspace） | 删 worktree、关 workspace |
+| `herdr-agents/scripts/retire.sh` | herdr-agents | 收工：`exit`（发 `/exit`、等它离开列表；带 `REPO=` 时不碰别的仓库的 agent）、`remove`（删 worktree、关它的 workspace） | 删 worktree、关 workspace |
+| `herdr-agents/scripts/test-scripts.sh` | herdr-agents | 用假 herdr 跑 `launch.sh` 的名字检查和 `retire.sh` 的 `REPO` 护栏 | 只写临时目录 |
 | `github-backlog/scripts/bootstrap.sh` | github-backlog | 检查 gh 与仓库；列出缺的标签，确认后才建（`--check` 只列） | 确认后建标签 |
 | `github-backlog/scripts/claim-issue.sh` | github-backlog | 认领、只读检查（`--check`）、`--self-test` | 认领时写 Issue |
 | `github-backlog/scripts/close-merged.sh` | github-backlog | 合并后核 PR 已落地、Issue 从 `In review` 改 `Done`（`--check` 只核） | 改 Issue 标签 |
 | `chief-of-staff/scripts/scan-collisions.sh` | chief-of-staff | 迁移号 / ADR 编号跨分支撞号扫描（`MIGRATION_DIR`、`ADR_DIR` 至少给一个；`--prs` 要 `gh`） | 不写 |
 | `chief-of-staff/scripts/test-scan-collisions.sh` | chief-of-staff | 在临时仓库里造出每种撞号情形，断言 `scan-collisions.sh` 的输出与退出码 | 只写临时目录 |
-| `chief-of-staff/scripts/scan-workers.sh` | chief-of-staff | 给 Monitor 用的巡检事件流：agent、PR（`gh`）、main 前进、撞号、心跳 | 不写（只 `git fetch`） |
+| `chief-of-staff/scripts/scan-workers.sh` | chief-of-staff | 给 Monitor 用的巡检事件流：本项目的 agent、PR（`gh`）、main 前进、撞号、同项目另一个幕僚长、整机负载、心跳 | 不写（只 `git fetch`） |
+| `chief-of-staff/scripts/test-scan-workers.sh` | chief-of-staff | 用两个临时仓库和假 herdr 跑 `scan-workers.sh`，断言只报本项目、查重复幕僚长、负载事件 | 只写临时目录 |
 | `chief-of-staff/scripts/closeout.sh` | chief-of-staff | PR 合并后按顺序收尾：`close-merged.sh` → `retire.sh exit` → 项目的 `DROP_DB_CMD` → `retire.sh remove` → 删本地分支 | 写——标签、worktree、workspace、分支，以及 `DROP_DB_CMD` 做的事 |
 
 `/chief-of-staff bootstrap` = 跑 `check-env.sh`，再跑你所配工作流的 bootstrap（配 GitHub 就是 `bootstrap.sh`）。

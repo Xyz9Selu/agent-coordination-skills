@@ -50,6 +50,10 @@ agy 的模型名：`gemini-3.8-flash-high` 是写下时（2026-09-17/18）最新
   大写也不行，不只是空格。
 - `herdr worktree create --label` 与 `herdr tab rename` 的标签**可以**带空格、`#`、`·`、中文（实测，见 HISTORY #8）。
   所以**标签给人看、agent 名给命令用**。
+- **名字在整台机器上唯一**，不分 workspace，也不分项目（实测，herdr 0.9.5）。撞名时 `agent start` 返回
+  `agent_name_taken`，并列出占着这个名字的 agent 的 pane 和 cwd。所以不同项目起的 agent 要在名字里带上能区分项目的
+  部分。`scripts/launch.sh` 在建 worktree 之前先查格式和重名；`agent start` 失败时，它把 herdr 的报错原样打出来。
+  推翻条件：herdr 改成按 workspace 或项目分开命名。来历见 HISTORY #23。
 - **`herdr agent rename <pane_id> <名字>` 可用**（实测）。在 herdr 之外直接起的 agy 在
   `agent list` 里是 `name=None`，按名字发不了 prompt；用 pane id 当 target 补个名字就能寻址了。
 
@@ -394,7 +398,7 @@ for p in $(pgrep -x agy); do printf '%s\t%s\n' "$p" "$(readlink /proc/$p/cwd)"; 
 
 | 情况 | 第一步 | 后两步 |
 |---|---|---|
-| **正常收工**：claude kind，活干完了、agent 空闲（例如它的 PR 已合并） | `scripts/retire.sh exit <名>`：发 `/exit`，等它从 `herdr agent list` 消失（最多 15 秒），没消失就退非零、别往下做 | `scripts/retire.sh remove <worktree>` |
+| **正常收工**：claude kind，活干完了、agent 空闲（例如它的 PR 已合并） | `scripts/retire.sh exit <名>`：发 `/exit`，等它从 `herdr agent list` 消失（最多 15 秒），没消失就退非零、别往下做。带上 `REPO=<仓库>` 时，同名 agent 不在这个仓库里就不碰它，退 3（名字全机唯一，只凭名字会收到别的项目的 agent） | `scripts/retire.sh remove <worktree>` |
 | **急停 / 卡住 / 非 claude kind / `/exit` 后还在列表里** | `kill <pid>`（§4：唯一实测可用的急停） | 同上，或手动 `git worktree remove --force` + `herdr workspace close` |
 
 为什么正常收工不直接 kill：`/exit` 让 Claude Code 自己退出、收好 transcript，退出之后它从 `herdr agent list`

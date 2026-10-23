@@ -14,7 +14,9 @@
 #     timeout_ms: 1800000)           # 上限 30 分钟；到期收到通知就原样再挂一次
 #
 # 重挂会丢掉内存里的状态：第一轮只记基线、不报变化，然后出一行 SCAN-READY 当快照。
-# 不需要在外面再套 grep 过滤：撞号只扫 herdr 管着的 worker 的 worktree 和打开着的 PR（见下）。
+# 不需要在外面再套 grep 过滤：只报**本项目**的 agent（cwd 与 REPO 同一个 git 仓库——主 checkout 和它的 worktree
+# 都算，按 `git rev-parse --git-common-dir` 判），别的项目的只在快照 / 心跳里计个数；撞号只扫本项目 worker 的
+# worktree 和打开着的 PR（见下）。
 #
 # 环境变量：
 #   REPO           仓库主 checkout 的路径（必填）
@@ -23,12 +25,14 @@
 #   HEARTBEAT=300  心跳间隔（秒）；0 = 不出心跳
 #   DEFAULT_REMOTE=origin  DEFAULT_BRANCH=main
 #   WATCH_PRS=1    0 = 不调 gh：不出 PR-* 事件，撞号只扫 worker 的 worktree（开头说一次）
+#   SELF_PANE=$HERDR_PANE_ID  幕僚长自己的 pane，查重复幕僚长时排除它；为空就不查（开头说一次）
+#   LOAD_WARN=<核数>  整机 1 分钟负载高于它（连续两轮）报 LOAD-HIGH
 #
 # ── 事件，以及幕僚长该怎么反应 ────────────────────────────────────────────────────────────
 #   SCAN-READY     开始盯了：盯着哪些 agent、几个打开的 PR、main 在哪。核对名单是不是你以为的那些。
 #   HEARTBEAT      定时轻看一眼（默认每 5 分钟轻看，事件来了再全查；用户定的节奏）。行里带当前状态
 #                  一览；没有别的事件就不必做什么，有异常（某个 working 很久不动之类）再去读那个 pane。
-#   AGENT-NEW      herdr 里出现了一个新的有名字的 agent。是你起的就核它送达了没有；不是你起的，弄清是谁的。
+#   AGENT-NEW      本项目出现了一个新的有名字的 agent。是你起的就核它送达了没有；不是你起的，弄清是谁的。
 #   AGENT-GONE     agent 从 `herdr agent list` 里消失（进程退出）。收尾过的正常；没收尾的去看 worktree、分支、PR。
 #   AGENT-STATUS   状态变了，**连续两轮一致才报**（防抖，见下），附画面最后几行。working→idle/done 多半是
 #                  做完一步或在等人：读回它说了什么，该回话就回话。
@@ -43,6 +47,11 @@
 #   COLLISION      撞号扫描的 🔴 行变了（新出现或内容变化），附全部 🔴 行。按 scan-collisions.sh 的建议协调：
 #                  先合并的保号，后合并的让路。
 #   COLLISION-CLEAR  之前报过的撞号都没了。
+#   COS-DUPLICATE  本项目里另有一个 pane 的标题是「… - CoS of …」（不是 SELF_PANE）。**不防抖，立刻报**：停止发牌，
+#                  告诉用户，见 SKILL.md「同一项目只能有一个幕僚长」。只认得出按本技能改过名、herdr 看得见的那种。
+#   LOAD-HIGH / LOAD-OK  整机负载连续两轮高于 / 回到 LOAD_WARN 以下，附本项目与其它项目各有几个 working。负载是
+#                  整台机器的，别的项目的 worker 也在里面：高着就先别起新 worker、别让自己的 worker 开重活；
+#                  别的项目的 agent 不归你动。
 #   PROBE-ERROR    某个探测失败（herdr / gh / git fetch / 撞号扫描退出 9）。**失败不吞掉**，但同一个错误只在
 #                  第一次出现时报一行；PROBE-OK 表示它恢复了。没恢复之前，这一项的「没事件」不是「没变化」。
 #
@@ -52,6 +61,9 @@
 #   权限框是要人动手的，不防抖。
 # · 心跳：Monitor 没事件就不会叫醒幕僚长，「没事件」和「脚本挂了」分不出来；心跳把两者分开，也给轻看定了节奏。
 # · 撞号只把 herdr agent 所在的、属于 REPO 的 worktree 交给 scan-collisions.sh，不扫本机所有 worktree。
+# · 只报本项目的 agent：herdr 的 agent 列表是整台机器的，曾混进别的项目的 agent（见 HISTORY #38）。项目按 git common
+#   dir 判，不按幕僚长标题里的项目简称（简称是随手起的，会重、会变）。
+# · 负载报整机的：两个项目的幕僚长抢同一批核，谁的 worker 列表里都看不见对方（见 HISTORY #38）。
 # · 仓库路径、目录都从环境变量来，不写死某个仓库；main 前进单独成事件。
 # 文件放在技能仓库里，不放会话临时目录（重启会清掉 /tmp）。
 
@@ -63,13 +75,17 @@ HEARTBEAT=${HEARTBEAT:-300}
 DEFAULT_REMOTE=${DEFAULT_REMOTE:-origin}
 DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
 WATCH_PRS=${WATCH_PRS:-1}
+SELF_PANE=${SELF_PANE-${HERDR_PANE_ID:-}}
+LOADAVG_FILE=${LOADAVG_FILE:-/proc/loadavg}
+ncpu=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1)
+LOAD_WARN=${LOAD_WARN:-$ncpu}
 BASE="$DEFAULT_REMOTE/$DEFAULT_BRANCH"
 SCAN_COLLISIONS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scan-collisions.sh"
 export MIGRATION_DIR="${MIGRATION_DIR:-}" ADR_DIR="${ADR_DIR:-}"
 
 STATE=$(mktemp -d) || exit 9
 trap 'rm -rf "$STATE"' EXIT
-declare -A reported pending pending_n prompt_on probe_err
+declare -A reported pending pending_n prompt_on probe_err cos_on proj_of
 first=1
 last_beat=$(date +%s)
 main_sha=""
@@ -77,6 +93,17 @@ collisions=""
 repo_common=$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || { echo "ERR: $REPO 不是 git 仓库" >&2; exit 9; }
 
 emit() { echo "[$(date +%H:%M)] $*"; }
+
+project_of() {  # cwd → 它所在 git 仓库的 common dir；不在仓库里为空。按 cwd 缓存
+  [ -n "${proj_of[$1]+x}" ] || proj_of[$1]=$(git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+  echo "${proj_of[$1]}"
+}
+
+load_now() {  # 整机 1 分钟负载
+  if [ -r "$LOADAVG_FILE" ]; then cut -d' ' -f1 "$LOADAVG_FILE"
+  else sysctl -n vm.loadavg 2>/dev/null | tr -d '{}' | awk '{print $1}'; fi
+}
+load_high=0; load_n=0; load=""
 
 # 同一个探测的同一个错误只报一次；恢复时报 PROBE-OK
 probe_fail() { [ "${probe_err[$1]:-}" = "$2" ] || emit "PROBE-ERROR $1: $2"; probe_err[$1]=$2; }
@@ -90,20 +117,36 @@ screen_tail() {  # 画面最后三行有内容的，去掉 TUI 的装饰行
 
 [ -z "$MIGRATION_DIR$ADR_DIR" ] && emit "ℹ 没设 MIGRATION_DIR / ADR_DIR：不扫撞号"
 [ "$WATCH_PRS" = 1 ] || emit "ℹ WATCH_PRS=0：不盯 PR，撞号只扫 worker 的 worktree"
+[ -n "$SELF_PANE" ] || emit "ℹ 没有 SELF_PANE / HERDR_PANE_ID：认不出自己，不查重复幕僚长"
 
 while true; do
   # ---------- herdr agents ----------
   worktrees=()
+  others=0; others_working=0; ours_working=0
   if agents_json=$(herdr agent list 2>&1); then
     probe_ok herdr
+    # 字段分隔用 \x1f：tab 是空白类 IFS，连续的会被并掉，没名字的 agent 就错位了
     mapfile -t rows < <(python3 -c '
 import json,sys
 for a in json.load(sys.stdin)["result"]["agents"]:
-    if a.get("name"):
-        print("\t".join([a["name"], a["agent_status"], a["pane_id"], a.get("cwd") or ""]))' <<<"$agents_json" 2>/dev/null)
-    declare -A seen=()
+    f=[a.get("name") or "", a["agent_status"], a["pane_id"], a.get("cwd") or "", a.get("terminal_title_stripped") or ""]
+    print("\x1f".join(x.replace("\x1f"," ").replace("\n"," ") for x in f))' <<<"$agents_json" 2>/dev/null)
+    declare -A seen=() cos_seen=()
     for row in "${rows[@]}"; do
-      IFS=$'\t' read -r name status pane cwd <<<"$row"
+      IFS=$'\x1f' read -r name status pane cwd title <<<"$row"
+      # 别的项目（或不在任何仓库里）的 agent：只计数，不报、不看画面
+      if [ -z "$cwd" ] || [ "$(project_of "$cwd")" != "$repo_common" ]; then
+        others=$((others + 1)); [ "$status" = working ] && others_working=$((others_working + 1))
+        continue
+      fi
+      [ "$status" = working ] && ours_working=$((ours_working + 1))
+      # 同一项目的另一个幕僚长：不防抖
+      if [ -n "$SELF_PANE" ] && [ "$pane" != "$SELF_PANE" ] && [[ "$title" == *" - CoS of "* ]]; then
+        cos_seen[$pane]=1
+        [ "${cos_on[$pane]:-0}" = 1 ] || emit "COS-DUPLICATE $pane「$title」cwd=$cwd 和你是同一个项目：停止发牌，告诉用户"
+        cos_on[$pane]=1
+      fi
+      [ -n "$name" ] || continue
       seen[$name]=1
       # 属于 REPO 的 linked worktree 交给撞号扫描（主 checkout 本身不算：那是幕僚长自己站的地方）
       if [ -n "$cwd" ] && top=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null) && [ "$top" != "$REPO" ] \
@@ -139,9 +182,24 @@ for a in json.load(sys.stdin)["result"]["agents"]:
         unset "reported[$name]" "pending[$name]" "pending_n[$name]" "prompt_on[$name]"
       fi
     done
-    unset seen
+    for p in "${!cos_on[@]}"; do [ -n "${cos_seen[$p]:-}" ] || unset "cos_on[$p]"; done
+    unset seen cos_seen
   else
     probe_fail herdr "herdr agent list failed: $(head -c 200 <<<"$agents_json")"
+  fi
+
+  # ---------- 整机负载（防抖：连续两轮越线才翻） ----------
+  if load=$(load_now) && [ -n "$load" ]; then
+    probe_ok load
+    over=$(awk -v l="$load" -v w="$LOAD_WARN" 'BEGIN{print (l > w) ? 1 : 0}')
+    if [ "$over" != "$load_high" ]; then load_n=$((load_n + 1)); else load_n=0; fi
+    if [ $load_n -ge 2 ]; then
+      load_high=$over; load_n=0
+      if [ "$load_high" = 1 ]; then tag=LOAD-HIGH; else tag=LOAD-OK; fi
+      [ $first = 1 ] || emit "$tag load ${load}（${ncpu} 核，阈值 $LOAD_WARN）| working：本项目 $ours_working，其它项目 $others_working"
+    fi
+  else
+    probe_fail load "读不到整机负载（$LOADAVG_FILE / sysctl vm.loadavg）"
   fi
 
   # ---------- main 前进 ----------
@@ -203,7 +261,7 @@ for a in json.load(sys.stdin)["result"]["agents"]:
     local a s=""
     for a in "${!reported[@]}"; do s+="$a=${reported[$a]} "; done
     local n; n=$(grep -c . "$STATE/prs.old" 2>/dev/null)
-    echo "agents: ${s:-（无）}| open PRs: ${n:-?} | $BASE ${main_sha:0:8} | 撞号 $(grep -c '🔴' <<<"$collisions")"
+    echo "agents: ${s:-（无）}| 其它项目 agent $others 个（working $others_working）| load ${load:-?}/${ncpu} 核 | open PRs: ${n:-?} | $BASE ${main_sha:0:8} | 撞号 $(grep -c '🔴' <<<"$collisions")"
   }
   if [ $first = 1 ]; then
     emit "SCAN-READY $(overview)"

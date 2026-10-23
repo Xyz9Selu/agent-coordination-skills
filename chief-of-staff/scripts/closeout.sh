@@ -44,7 +44,9 @@ br=$(sed -n 's/^branch=//p' <<<"$out" | tail -1)
 
 # 2 · 让 worker /exit，等它从列表里消失
 exited=1
-if [ "$agent" != - ]; then "$retire" exit "$agent" || exited=0; fi
+# 带上 REPO：名字在整台机器上唯一，列表里的同名 agent 若不在本仓库，就是别的项目的（retire.sh 退 3、不碰它），
+# 而我们的 worker 已经不在了——照常往下收自己的 worktree。
+if [ "$agent" != - ]; then REPO="$REPO" "$retire" exit "$agent"; rc=$?; [ $rc = 0 ] || [ $rc = 3 ] || exited=0; fi
 
 wt=$(git worktree list --porcelain | awk -v b="refs/heads/$br" '/^worktree /{w=substr($0,10)} $0=="branch "b{print w}')
 if [ -n "$wt" ] && [ $exited = 0 ]; then echo "⚠ not removing $wt while $agent is still there"; exit 1; fi

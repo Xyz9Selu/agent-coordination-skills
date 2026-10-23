@@ -67,13 +67,15 @@ For the lighter flow, skip herdr: tell the agent your requirements (`todo-record
 | `herdr-agents/scripts/launch.sh` | herdr-agents | Start a claude agent in a new worktree: wait until ready (answers the trust dialog), send one instruction, count deliveries (`DRY_RUN=1` prints only) | Creates a worktree, workspace and agent |
 | `herdr-agents/scripts/count-delivered.sh` | herdr-agents | Count how many times an instruction reached a claude agent's transcript | No |
 | `herdr-agents/scripts/deliver-when-idle.sh` | herdr-agents | Send a message once the agent is idle and its input box is empty | Sends the message |
-| `herdr-agents/scripts/retire.sh` | herdr-agents | Wrap up: `exit` (send `/exit`, wait until the agent is gone), `remove` (remove the worktree, close its workspace) | Removes the worktree, closes the workspace |
+| `herdr-agents/scripts/retire.sh` | herdr-agents | Wrap up: `exit` (send `/exit`, wait until the agent is gone; with `REPO=` it refuses an agent outside that repo), `remove` (remove the worktree, close its workspace) | Removes the worktree, closes the workspace |
+| `herdr-agents/scripts/test-scripts.sh` | herdr-agents | Runs `launch.sh`'s name checks and `retire.sh`'s `REPO` guard against a fake herdr | Only in a temp dir |
 | `github-backlog/scripts/bootstrap.sh` | github-backlog | Checks `gh` and the repo; lists missing labels and creates them only after confirmation (`--check` lists only) | Creates labels after confirmation |
 | `github-backlog/scripts/claim-issue.sh` | github-backlog | Claim an issue, read-only check (`--check`), `--self-test` | Writes the issue when claiming |
 | `github-backlog/scripts/close-merged.sh` | github-backlog | After merge: verify the PR landed, move its Issue `In review` → `Done` (`--check` verifies only) | Changes Issue labels |
 | `chief-of-staff/scripts/scan-collisions.sh` | chief-of-staff | Scans for migration / ADR number collisions across branches (`MIGRATION_DIR` and/or `ADR_DIR` required; `--prs` uses `gh`) | No |
 | `chief-of-staff/scripts/test-scan-collisions.sh` | chief-of-staff | Builds each collision case in a temporary repo and checks `scan-collisions.sh`'s output and exit code | Only in a temp dir |
-| `chief-of-staff/scripts/scan-workers.sh` | chief-of-staff | Patrol event stream for the Monitor tool: agents, PRs (`gh`), main moving, collisions, heartbeat | No (only `git fetch`) |
+| `chief-of-staff/scripts/scan-workers.sh` | chief-of-staff | Patrol event stream for the Monitor tool: this project's agents, PRs (`gh`), main moving, collisions, a second chief of staff on the same project, machine load, heartbeat | No (only `git fetch`) |
+| `chief-of-staff/scripts/test-scan-workers.sh` | chief-of-staff | Runs `scan-workers.sh` against two temp repos and a fake herdr; checks project filtering, duplicate-chief detection and load events | Only in a temp dir |
 | `chief-of-staff/scripts/closeout.sh` | chief-of-staff | After a PR merges, runs the cleanup in order: `close-merged.sh` → `retire.sh exit` → the project's `DROP_DB_CMD` → `retire.sh remove` → delete the local branch | Yes — labels, worktree, workspace, branch, and whatever `DROP_DB_CMD` does |
 
 `/chief-of-staff bootstrap` runs `check-env.sh`, then the bootstrap of the workflow you configured (for GitHub, `bootstrap.sh`).

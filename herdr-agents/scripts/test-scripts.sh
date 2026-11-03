@@ -78,6 +78,7 @@ print(json.dumps({"result":{"agents":[{"name":n,"cwd":c,"pane_id":"w:p","agent_s
   "workspace list") cat "$T/ws.json" ;;
   "workspace close") "$T/wsctl" close "\$3"; echo '{"result":{}}' ;;
   "tab rename") echo '{"result":{}}' ;;
+  "pane read") cat "$T/screen" ;;
   *) exit 1 ;;
 esac
 EOF
@@ -148,6 +149,19 @@ check "同一个 id 指向了别处（id 被复用）→ 留着" 0 "kept: not th
 "$T/wsctl" set >/dev/null
 check "workspace 已被作者关掉 → 静默清掉记录" 0 "^$" "$here/root-ws.sh" reap "$A"
 check "  记录文件已删" 1 "No such file" cat "$rec"
+
+# ---------- deliver-when-idle.sh：什么时候算输入框空 ----------
+dwi() { env DELIVER_ROUNDS=1 DELIVER_SLEEP=0 "$here/deliver-when-idle.sh" "hi" mine; }
+printf 'mine|%s\n' "$T/A" > "$T/agents"
+printf '\e[0m\e[38;2;153;153;153m\xe2\x9d\xaf\xc2\xa0\e[0m\e[2m[suggested text]\e[0m\n' > "$T/screen"; : > "$T/calls"
+check "只有灰字建议：算空，照发" 0 "mine delivered rc=0" dwi
+called "  确实发了" "agent prompt mine hi"
+printf '\xe2\x9d\xaf half typed\n' > "$T/screen"; : > "$T/calls"
+check "有人打了字：等" 0 "mine input box not empty, waiting" dwi
+notcalled "  没发" "agent prompt mine hi"
+printf '  Background\n  2 active shells\n  \xe2\x9d\xaf \xe2\x97\x8f E=/tmp/x   running\n  \xe2\x86\x91/\xe2\x86\x93 to select \xc2\xb7 Enter to view \xc2\xb7 x to stop \xc2\xb7 Esc to close\n' > "$T/screen"; : > "$T/calls"
+check "后台任务面板盖住输入框：报面板开着，不报输入框非空" 0 "mine panel open over the input box" dwi
+notcalled "  没发，也没按键" "agent prompt mine hi|send-keys"
 
 echo "---- $pass 过，$fail 败"
 [ $fail = 0 ]

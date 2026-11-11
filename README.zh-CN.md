@@ -24,7 +24,7 @@
 - **[herdr](https://herdr.dev)**（[源码](https://github.com/herdrdev/herdr)）：给 coding agent 用的终端工作区管理器，让 agent 在常驻的 pane 里持续运行，并能通过 CLI 互相驱动。`herdr-agents` 和 `chief-of-staff` 都建在它上面，先装它（见其[安装说明](https://github.com/herdrdev/herdr#install)）。实测版本 **0.9.5**。
 - **官方 `herdr` 技能**：随 herdr 一起发布。装好 herdr 后 `herdr --skill` 会打印与你二进制版本匹配的那一份（存成 `~/.agents/skills/herdr/SKILL.md`），或者运行 `npx skills add herdrdev/herdr --skill herdr -g`；见 [herdr 的 agent-skill 页](https://herdr.dev/docs/agent-skill/)。`herdr-agents` 要求 agent 先读它。
 - **`gh`**（GitHub CLI），已登录：`github-backlog` 和 `chief-of-staff` 里盯 PR 的部分要用。实测版本 **2.95.0**。
-- **至少一个 coding agent CLI** 当 worker：**Claude Code**（实测 2.1.306）、**OpenCode**（1.18.32）或 **agy**（1.2.12）。`check-env.sh` 会拿你的版本和这些对一遍，版本不同只提醒。
+- **至少一个 coding agent CLI** 当 worker：**Claude Code**（实测 2.1.306）、**OpenCode**（1.18.32）或 **agy**（1.5.5；技能发现是在 1.2.12 上测的）。`check-env.sh` 会拿你的版本和这些对一遍，版本不同只提醒。
 - **bash**，在 **Linux 和 WSL2** 上实测。macOS 没测过；脚本用到 `ps`、unix socket 和 GNU 风格的工具，预计有差异。
 
 ## 快速上手

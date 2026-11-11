@@ -15,9 +15,9 @@
 # 下面的实测版本必须与 SKILL.md / HISTORY.md 里写的一致；改了那边的实测，就改这里。
 set -uo pipefail
 
-TESTED_HERDR="0.9.5"      # SKILL.md「版本绑定」里最新的一批实测（2026-10-21）；更早的条目绑在 0.8.0 / 0.9.1，见那一节
+TESTED_HERDR="0.9.5"      # SKILL.md「版本绑定」里最新的一批实测（2026-10-21、2026-11-11）；陷阱 ③ 等几条仍绑在 0.8.0，见那一节
 TESTED_CLAUDE="2.1.306"   # SKILL.md §1「claude kind」、§2（2026-10-21）
-TESTED_AGY="1.2.12"       # HISTORY.md #6、SKILL.md §8
+TESTED_AGY="1.5.5"        # HISTORY.md #26（陷阱 ①、①a、②、⑥）；SKILL.md §8 的技能发现仍是 1.2.12 测的
 TESTED_OPENCODE="1.18.32" # SKILL.md §8（技能发现）
 
 case "${1:-}" in

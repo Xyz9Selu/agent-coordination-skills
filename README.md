@@ -42,7 +42,7 @@ no issue claiming, no collision grouping, just "write it down" and "do them one 
 - **`gh`** (GitHub CLI), logged in: needed by `github-backlog` and by the PR-watching parts of `chief-of-staff`. Measured
   with **2.95.0**.
 - **At least one coding agent CLI** to run as a worker: **Claude Code** (measured with 2.1.306), **OpenCode** (1.18.32),
-  or **agy** (1.2.12). `check-env.sh` compares your versions with these; a different version only gets a notice.
+  or **agy** (1.5.5; skill discovery was checked on 1.2.12). `check-env.sh` compares your versions with these; a different version only gets a notice.
 - **bash**, on **Linux and WSL2** (where everything was measured). macOS has not been tested; the scripts use `ps`, unix
   sockets and GNU-style tools, so expect differences.
 

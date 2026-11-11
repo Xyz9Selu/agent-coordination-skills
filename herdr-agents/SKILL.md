@@ -16,8 +16,10 @@ description: Use when driving another coding agent (claude / agy / opencode) thr
 
 ## 版本绑定
 
-> **每条都绑在一个 herdr 版本上。** 下面「已知陷阱」多数条目实测于 **0.8.0**，**未在 0.9.x 上复测**；
-> 陷阱 ① 的现状实测于 **0.9.1**；claude kind 的条目实测于 **0.9.5 + Claude Code 2.1.306**。发现某条对不上时，
+> **每条都绑在一个 herdr 版本上。** 陷阱 ①、①a、②、⑥ 的 Escape 一行实测于 **herdr 0.9.5 + agy 1.5.5**（HISTORY #26）；
+> claude kind 的条目实测于 **0.9.5 + Claude Code 2.1.306**；陷阱 ③、`agent list` 的可见范围、名字与标签、`SendMessage`
+> 扣留仍是 **0.8.0** 的实测，**未在 0.9.x 上复测**。agy 会自己升级（复测途中从 1.4.4 升到了 1.5.5），绑在 agy 上的条目
+> 先看 `agy --version`。发现某条对不上时，
 > 先核 `herdr --version` 与 `https://herdr.dev/latest.json` 的发布说明——上游可能已经修了，那就该升级，而不是
 > 在这里加一条新的变通写法。但发布说明说修了，不等于这条路径修了：要实测。
 >
@@ -75,29 +77,31 @@ agy 的模型名：`gemini-3.8-flash-high` 是写下时（2026-09-17/18）最新
 或者按本节起在 worktree 里，读写 worktree 仍然弹 `external_directory` 框。任一出现，记下
 `opencode --version` 重测。
 
-### 陷阱 ① `agent start` 返回时 TUI 还没接管终端，此时发出的 prompt 会丢 —— 而 `--wait` 有四分之一的概率谎报成功
+### 陷阱 ① `agent start` 说就绪，不等于发出去的 prompt 能收到 —— 发之前先看画面
 
-**`agent start` 返回的 `interactive_ready: true` 对 agy 是过早的。** 它说的是 pane 里的进程起来了，
-不是 agy 的 TUI 已经接管终端。官方技能说 `agent start` 在 herdr「认为它可以交互」后才返回——对 agy
-这条路径不成立。
+**`interactive_ready: true` 是 herdr 从画面猜的。** 首次启动、引导一类画面会被报成就绪，prompt 打进去就丢，
+`agent prompt` 照样返回成功（上游 herdr #5888，0.9.5 上仍未修）。所以**轮询到 banner 再发**；普通启动时第一轮
+轮询就能看到 banner，这一步不贵。这个问题上连错过三次结论（HISTORY #7）——**想改这一节之前先读 HISTORY #5、#7、#26。**
 
-实测（herdr 0.9.1）：`agent start` 后**立即发**，真执行 **0/4**（**1 次报 `OK` 却根本没执行**）；**轮询到 banner
-出现再发**，**4/4**。对照实验见 HISTORY #5；这个问题上连错过三次结论，见 HISTORY #7——**想改这一节的任何一句
-之前先读那两条。**
+曾是「`agent start` 后立即发，真执行 0/4、`--wait` 1/4 谎报成功（herdr 0.9.1）」，0.9.5 + agy 1.5.5 上 12 次立即发
+全部真执行，已推翻，见 HISTORY #26。
 
 ### 陷阱 ①a 新 worktree 先弹「是否信任此文件夹」，`recent --lines 20` 看不见它
 
 agy 在没信任过的目录里启动（每个新建的 worktree 都是），先出一个「Do you trust the contents of this
 project? > Yes, I trust this folder」对话框，**banner 要等按了 Enter 才出现**。用
 `--source recent-unwrapped --lines 20` 轮询会在这个对话框上**读回全空**，循环空转到超时，prompt 随后
-打进对话框里。原因、测量表、上游核查见 HISTORY #6。
+打进对话框里。原因、测量表、上游核查见 HISTORY #6；0.9.5 + agy 1.5.5 上复测照旧（HISTORY #26）。
+
+herdr 0.9.4 起，`agent start` 遇到这个框返回 `agent_not_ready`（状态 `blocked`），不再报就绪。下面的步骤不看它的
+返回码，照样由循环按掉对话框。
 
 ### 怎么做（步骤）
 
 ```bash
 herdr agent start <名> --kind agy --pane <p> --timeout 90000 -- --model <m>
 
-# 【必须】轮询到 TUI 真的渲染出来，再发 —— 实测 4/4 可靠
+# 【必须】轮询到 TUI 真的渲染出来，再发（防首次启动画面被报成就绪，陷阱 ①）
 # 新 worktree 会先弹「是否信任此文件夹」（①a）；这个循环替你按掉它
 for i in $(seq 1 60); do
   scr=$(herdr pane read <p> --source visible)
@@ -109,14 +113,15 @@ done
 
 - 判据串是 `Antigravity CLI [0-9]`，**不是** `Antigravity CLI`：信任对话框里有一句「Antigravity CLI
   requires permission…」，不带版本号的串会在对话框阶段就误判 banner 到了。banner 是
-  「Antigravity CLI 1.2.12」这种带版本号的写法。
+  「Antigravity CLI 1.5.5」这种带版本号的写法。
 - 其它 kind 的 banner 特征字串不同，**自己回读一眼定**（claude 见下一小节）。
 
 **完成判据：** 循环是因为匹配到 banner 特征串而 `break` 的，不是因为跑满 60 次。跑满了就是没就绪，
 先 `pane read --source visible` 看画面停在哪，别发——看之前先确认这个 pane 没被滚上去（陷阱 ④b）。
 
-**什么观测会推翻本节**：轮询到 banner 之后发出的 prompt 仍然丢；或者立即发能稳定成功；新 worktree 里
-启动 agy 不再弹信任对话框；banner 不再带版本号。任一出现，按 HISTORY #5、#6 重做实验，并先核 `herdr --version`。
+**什么观测会推翻本节**：轮询到 banner 之后发出的 prompt 仍然丢；新 worktree 里启动 agy 不再弹信任对话框；
+banner 不再带版本号；herdr #5888 修好（首次启动画面不再报就绪）——那时等 banner 这一步可以删。任一出现，按
+HISTORY #5、#6、#26 重做实验，并先核 `herdr --version`、`agy --version`。
 
 ### claude kind：特征串、信任框，以及一条命令做完 §1–§2
 
@@ -144,7 +149,8 @@ herdr agent prompt <名> '<指令>' --wait --until working --timeout 12000
 
 ### `--wait` 的返回码不能当证据
 
-实测 4 次立即发里有 1 次返回 `OK` 而指令其实丢了 —— **假阳性**（HISTORY #5）。所以：
+`OK` 只说明 herdr 打完了字、看到了状态变化，不说明对方收到了：herdr 0.9.1 上出现过返回 `OK` 而指令其实丢了
+（HISTORY #5），上游 #5888 是同一类，0.9.5 上仍未修。所以：
 
 - `agent_prompt_stalled` ⇒ 确实没进去，可以信，重发一次。
 - `OK` ⇒ **什么都不能证明**，必须回读画面确认（下一小节）。
@@ -225,10 +231,11 @@ agent），由调用方看了再关（见 HISTORY #25）。**推翻条件**：�
 各 harness 发现用户级技能的目录不同，见 §8。装对了位置，指令里只写技能名就行；没把握时，在一个空目录里
 让那个 agent 列一次技能。
 
-### 一个尚未证伪也尚未确认的观测
+### 对已经在干活的 agent 发指令
 
-对**已经在 working** 的 agent 发指令时，`--wait --until working` 返回 `timeout` 而不是
-`agent_prompt_stalled`（它本来就在 working，观察不到状态变化），消息照样进队列。一次观测，只记不写死。
+消息进队列（陷阱 ②）；`--wait --until working` 的返回说明不了它进没进去，照样回读。
+曾是「这时 `--wait --until working` 返回 `timeout`」（一次观测），0.9.5 + agy 1.5.5 上 3 次都返回 `agent_prompted`，
+已推翻，见 HISTORY #26。
 
 ## 3 · 回读：用哪种读法，读到的状态能不能信
 
@@ -306,7 +313,11 @@ agent 退出后会**从列表里消失**，pane 变 `unknown`，死活可判。�
 ### 陷阱 ② `agent prompt` 是排队，不是打断
 
 给正在干活的 agent 插指令，它会等当前这轮**完整跑完**才处理。改派时必须接受「对方会先把手上这轮
-做完」。
+做完」；要它立刻停，用陷阱 ⑥ 的 Escape 或 `kill`。
+
+agy 会把耗时的命令放到后台、先结束这一轮，这时排队的消息会在命令跑完之前就被回答——那是这一轮结束了，
+不是插队。agy 排队消息旁边的 `alt+m to send immediately`（以及 `/config` 里的 `Queued Messages`）没测干净，
+别当打断手段用（HISTORY #26）。**推翻条件**：排队的消息在同一轮没结束时就被处理了。
 
 ### 陷阱 ⑥ 四条「叫停」路径，实测只有一部分能用（见 HISTORY #16）
 
@@ -314,11 +325,12 @@ agent 退出后会**从列表里消失**，pane 变 `unknown`，死活可判。�
 |---|---|
 | `herdr agent prompt` | 排队，不打断（同陷阱 ②） |
 | `SendMessage`（Claude Code 跨 session 消息） | 会被接收方扣留等人工批准；`dialogExpiry` 默认 5 分钟，超时**静默丢弃并回拒绝** —— 发送方只看到「已扣留」，看不出是超时废弃 |
-| `herdr pane send-keys <pane_id> Escape` | 仍未实测 |
+| `herdr pane send-keys <pane_id> Escape` | **对 agy 实测可用**：前台命令被停掉，画面出现 `Interrupted · What should Antigravity CLI do instead?`，排队的那条被放回输入框（HISTORY #26）。claude kind 没测；对方空闲时按下去有什么副作用没测 |
 | `herdr agent send-keys <agent> <键>` | **实测可用**（替 agy 按权限提示的 `2`）。官方技能也给了 `agent send-keys <名> esc` 的写法；用它当急停**没单独测过** |
 | `herdr agent <stop>` | **不存在这个子命令** |
 
-唯一实测可用的急停手段：`kill <pid>`。pid 从该 agent 自报的地方取——例如它写下的占住记录里的进程号
+对所有 kind 都实测可用的急停只有 `kill <pid>`；agy 还可以用上表的 Escape。**推翻条件**：对 agy 按 Escape 后
+画面没有 `Interrupted`，或前台命令的进程还在。pid 从该 agent 自报的地方取——例如它写下的占住记录里的进程号
 字段，或 §6 的「进程 ↔ worktree」对照。**`SendMessage` 不是急停手段** —— 会排队、会被扣留、会静默超时
 作废，指望它打断正在跑的 agent 会白等。
 
@@ -403,7 +415,7 @@ for p in $(pgrep -x agy); do printf '%s\t%s\n' "$p" "$(readlink /proc/$p/cwd)"; 
 | 情况 | 第一步 | 后两步 |
 |---|---|---|
 | **正常收工**：claude kind，活干完了、agent 空闲（例如它的 PR 已合并） | `scripts/retire.sh exit <名>`：发 `/exit`，等它从 `herdr agent list` 消失（最多 15 秒），没消失就退非零、别往下做。带上 `REPO=<仓库>` 时，同名 agent 不在这个仓库里就不碰它，退 3（名字全机唯一，只凭名字会收到别的项目的 agent） | `scripts/retire.sh remove <worktree>` |
-| **急停 / 卡住 / 非 claude kind / `/exit` 后还在列表里** | `kill <pid>`（§4：唯一实测可用的急停） | 同上，或手动 `git worktree remove --force` + `herdr workspace close` |
+| **急停 / 卡住 / 非 claude kind / `/exit` 后还在列表里** | `kill <pid>`（§4：对所有 kind 都可用的急停） | 同上，或手动 `git worktree remove --force` + `herdr workspace close` |
 
 为什么正常收工不直接 kill：`/exit` 让 Claude Code 自己退出、收好 transcript，退出之后它从 `herdr agent list`
 消失，这本身就是「进程停了」的判据，不用去找 pid。为什么急停不用 `/exit`：它是一条普通 prompt，对方正忙时会

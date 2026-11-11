@@ -107,6 +107,8 @@ sends the prompt and Enter before reporting successful submission」），0.8.2 
 
 同一实验推翻了 2026-09-22 早些时候写过的「没报错就是已落地，不要补发」：4 次立即发里有 1 次返回 `OK` 而指令其实丢了。
 
+2026-11-11 在 herdr 0.9.5 + agy 1.5.5 上复测，0/4 不再复现，见 #26。
+
 ## #6 · 陷阱 ①a：新 worktree 先弹信任框，旧的轮询读法看不见它（2026-09-28，herdr 0.9.1 / agy 1.2.11–1.2.12）
 
 原 `startup-evidence.md` §①a。
@@ -366,3 +368,54 @@ pane、无 agent 在跑，防的是作者在里面干了活，或另一个 worke
 变量，拿它跑新测试会挂在 15 秒间隔上，所以红的一侧用上面那段屏幕直接对旧判断验。
 
 **推翻条件：** 面板底部不再写「Esc to close」；或者出现别的盖住输入框、但不带这行字的界面。
+
+## #26 · 0.9.1 那批 agy 结论在 0.9.5 上复测（2026-11-11，herdr 0.9.5，agy 1.4.4→1.5.5）
+
+**为什么测：** 版本绑定里有几条写着「实测于 0.9.1」，本机已是 0.9.5，没人看过 0.9.2–0.9.5 的发布说明。按全局规矩先把
+旧结论当成「可能已经不成立」去测。
+
+**上游核查：** 0.9.5 是 `https://herdr.dev/latest.json` 上的最新版。0.9.2–0.9.5 的发布说明里**没有**提 `agent prompt` /
+`agent start` 就绪判定或 `pane read --lines` 计数方式的条目；相关的只有 0.9.4「Antigravity permission, question and
+workspace-trust dialogs show as blocked」。issue：#5888（open，0.9.5）首次启动/引导画面被报成 `idle` +
+`interactive_ready: true`，`agent.prompt` 打进去文本丢失而本身返回成功；#4529（Windows 上刚起的 Claude Code 第一条
+prompt 约 1/4 不提交）维护者复现不出，按过期关闭。agy 本地的 `~/.gemini/antigravity-cli/cache/CHANGELOG.md` 停在
+1.2.14（9 月 30 日），查不到之后的说明。
+
+**环境：** 一次性 workspace；一个已信任的空目录；每次新开一个 tab、新起一个 agy（默认模型 Gemini 3.8 Flash High）。
+agy 在第一次和第二次启动之间自己从 1.4.4 升到了 1.5.5，后面全部在 1.5.5 上。测完 workspace、agent、进程都关掉。
+
+**陷阱 ①（判据同 #5：画面上 `PROBEOK-xx` 出现 2 次 = 回显 + 真回答；再看 banner 与 prompt 的行号先后）：**
+
+| 组 | 做法 | 真执行 | `--wait --until working` | banner 行 / prompt 行 |
+|---|---|---|---|---|
+| A | `agent start` 返回后立即发，约 70 字节 | 4/4 | 4 次 `agent_prompted` | 3 / 10 |
+| C | 立即发，约 3.5KB（对照 #5 的 3KB） | 4/4 | 4 次 `agent_prompted` | 3 / 10，回答在 32 |
+| B | 轮询到 banner 再发 | 4/4 | 4 次 `agent_prompted` | 第 1 次轮询就看到 banner |
+
+12 次里没有一次「报 OK 却没执行」。B 组第一轮就看到 banner：`agent start` 返回时 agy 的 TUI 已经画好了。herdr 和 agy
+两边都变了，发布说明里都找不到对应修复，**分不清是谁修好的**；降级 herdr 做对照要动全机共用的 server，没做。
+正文保留「轮询到 banner 再发」，理由改成 #5888 那一类问题还没修。
+
+**陷阱 ①a：**
+- 纯 shell：顶部打两行，`tput cup 48 0` 把光标挪下去 → `--lines 20` 读不到那两行，`--lines 80`、`visible` 读得到。
+- agy 1.5.5 在没信任过的目录里：`recent-unwrapped --lines 20` 0 行，`--lines 80` 8 行，`visible` 8 行，与 #6 的表一致。
+- 新现象：`agent start` 直接返回 `agent_not_ready`（「is blocked during startup」），`agent explain` 命中 `trust_prompt`
+  （remote manifest `2026.10.05.1`）。信任后 banner 仍是 `Antigravity CLI 1.5.5`，带版本号。
+
+**陷阱 ② 与排队：**
+- 一轮约 25 秒、不调工具的长输出中途 `agent prompt` 一条：画面显示 `▸ <消息> (alt+m to send immediately)` 和
+  `Press up to edit queued messages`，**这一轮结束后**才回答。
+- 让 agy 跑 `sleep 40` / `sleep 150` 时，它多次自己把命令放到后台并结束这一轮（「I have launched … as a background task」），
+  排队的消息于是在命令跑完前就被回答。是这一轮结束了，不是插队。
+- `herdr agent send-keys <名> alt+m` 试了两次，两次 agy 都已把命令放进后台，分不清是 alt+m 起的作用还是这一轮自己结束了。
+  没测干净。本机 agy `settings.json` 没设 `queuedMessages`（默认 `Queue`）。
+
+**陷阱 ⑥ 的 Escape：** agy 前台跑 `sleep 150` 时，`herdr pane send-keys <p> Escape` → 4 秒内出现
+`⎿ Interrupted · What should Antigravity CLI do instead?`，状态变 `done`，`sleep 150` 进程不在了；排队的那条消息被放回
+输入框。之后 `pane send-keys <p> ctrl+u` 和 `agent send-keys <名> ctrl+u` 各一次，都把输入框清空了。只测了 agy。
+
+**`--wait` 对已在 working 的 agent：** 3 次对 working 的 agy 发 `--wait --until working --timeout 5000`，3 次都返回
+`agent_prompted`。原先「返回 timeout」那一次观测的说法删掉。
+
+**推翻条件：** 见正文各节。陷阱 ① 那一句的翻案条件是：`agent start` 返回后立即发的 prompt 落在 banner 之前，或回读
+不到回答——那时回到 #5 的结论，先核两边版本。

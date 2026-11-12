@@ -47,7 +47,7 @@
 #   COLLISION      撞号扫描的 🔴 行变了（新出现或内容变化），附全部 🔴 行。按 scan-collisions.sh 的建议协调：
 #                  先合并的保号，后合并的让路。
 #   COLLISION-CLEAR  之前报过的撞号都没了。
-#   COS-DUPLICATE  本项目里另有一个 pane 的标题是「… - CoS of …」（不是 SELF_PANE）。**不防抖，立刻报**：停止发牌，
+#   COS-DUPLICATE  本项目里另有一个 pane 的标题是「… - CoS of …」（不是 SELF_PANE）。**不防抖，立刻报**：停止发牌，问用户要不要停掉它，
 #                  告诉用户，见 SKILL.md「同一项目只能有一个幕僚长」。只认得出按本技能改过名、herdr 看得见的那种。
 #   LOAD-HIGH / LOAD-OK  整机负载连续两轮高于 / 回到 LOAD_WARN 以下，附本项目与其它项目各有几个 working。负载是
 #                  整台机器的，别的项目的 worker 也在里面：高着就先别起新 worker、别让自己的 worker 开重活；
@@ -143,7 +143,7 @@ for a in json.load(sys.stdin)["result"]["agents"]:
       # 同一项目的另一个幕僚长：不防抖
       if [ -n "$SELF_PANE" ] && [ "$pane" != "$SELF_PANE" ] && [[ "$title" == *" - CoS of "* ]]; then
         cos_seen[$pane]=1
-        [ "${cos_on[$pane]:-0}" = 1 ] || emit "COS-DUPLICATE $pane「$title」cwd=$cwd 和你是同一个项目：停止发牌，告诉用户"
+        [ "${cos_on[$pane]:-0}" = 1 ] || emit "COS-DUPLICATE $pane「$title」cwd=$cwd 和你是同一个项目：停止发牌，问用户要不要停掉它"
         cos_on[$pane]=1
       fi
       [ -n "$name" ] || continue

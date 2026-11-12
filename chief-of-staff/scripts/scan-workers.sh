@@ -48,7 +48,7 @@
 #                  先合并的保号，后合并的让路。
 #   COLLISION-CLEAR  之前报过的撞号都没了。
 #   COS-DUPLICATE  本项目里另有一个 pane 的标题是「… - CoS of …」（不是 SELF_PANE）。**不防抖，立刻报**：停止发牌，问用户要不要停掉它，
-#                  告诉用户，见 SKILL.md「同一项目只能有一个幕僚长」。只认得出按本技能改过名、herdr 看得见的那种。
+#                  见 SKILL.md「同一项目只能有一个幕僚长」。只认得出按本技能改过名、herdr 看得见的那种。
 #   LOAD-HIGH / LOAD-OK  整机负载连续两轮高于 / 回到 LOAD_WARN 以下，附本项目与其它项目各有几个 working。负载是
 #                  整台机器的，别的项目的 worker 也在里面：高着就先别起新 worker、别让自己的 worker 开重活；
 #                  别的项目的 agent 不归你动。

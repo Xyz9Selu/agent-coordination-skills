@@ -420,8 +420,12 @@ for p in $(pgrep -x agy); do printf '%s\t%s\n' "$p" "$(readlink /proc/$p/cwd)"; 
 为什么正常收工不直接 kill：`/exit` 让 Claude Code 自己退出、收好 transcript，退出之后它从 `herdr agent list`
 消失，这本身就是「进程停了」的判据，不用去找 pid。为什么急停不用 `/exit`：它是一条普通 prompt，对方正忙时会
 **排队**到这一轮跑完（陷阱 ②），打断不了任何东西。
-`/exit` 这条路径只在空闲时测过一次（见 HISTORY #19）。**推翻条件**：`/exit` 之后 agent 留在列表里
-（`retire.sh exit` 会报 ⚠）；或 herdr 改成 agent 退出后仍保留在列表里。
+agent 有后台任务（Bash 后台、Monitor）时，`/exit` 会先弹「Exit and stop tasks / Move to background and exit / Stay」
+确认框，不处理就一直停在那里。`retire.sh exit` 看到光标停在「Exit and stop tasks」上就按一次 Enter，后台任务随之停掉
+（Claude Code 2.1.322 实测，见 HISTORY #27）。手动发 `/exit` 时同样要读一下屏幕。
+`/exit` 这条路径只在空闲时测过（见 HISTORY #19、#27）。**推翻条件**：`/exit` 之后 agent 留在列表里
+（`retire.sh exit` 会报 ⚠）；或 herdr 改成 agent 退出后仍保留在列表里；或确认框的文案或默认项变了（`retire.sh` 不按，
+照样报 ⚠）。
 
 `retire.sh remove` 按 `herdr workspace list` 里每个 workspace 的 `worktree.checkout_path` 找挂着这个 worktree 的那个
 （workspace 的标签是给人看的，可能被改过；`checkout_path` 是 herdr 自己记的路径），删 worktree，关 workspace，

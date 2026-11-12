@@ -37,8 +37,18 @@ case "$cmd" in
         echo "⚠ agent $arg is not in $REPO (cwd: ${cwd:-?}) — not touching another project's agent"; exit 3
       fi
     fi
+    pane=$(herdr agent list 2>/dev/null | python3 -c 'import json,sys;[print(a.get("pane_id") or "") for a in json.load(sys.stdin)["result"]["agents"] if a.get("name")==sys.argv[1]]' "$arg" | head -1)
     herdr agent prompt "$arg" "/exit" >/dev/null 2>&1
-    for i in $(seq 1 15); do in_list "$arg" || break; sleep 1; done
+    pressed=0
+    for i in $(seq 1 15); do
+      in_list "$arg" || break
+      # 有后台任务（Bash 后台、Monitor）时 /exit 先弹确认框，默认光标在「Exit and stop tasks」（HISTORY #27）。
+      # 只在光标确实停在那一项时按一次 Enter；框的文案或顺序变了就不按，留给下面报「还在」。
+      if [ "$pressed" = 0 ] && [ -n "$pane" ] && herdr pane read "$pane" --lines 15 2>/dev/null | grep -q '❯ 1\. Exit and stop tasks'; then
+        herdr pane send-keys "$pane" Enter >/dev/null 2>&1; pressed=1; echo "ℹ $arg had background tasks: chose 「Exit and stop tasks」"
+      fi
+      sleep 1
+    done
     if in_list "$arg"; then echo "⚠ agent $arg still in herdr agent list"; exit 1; fi
     echo "agent $arg exited"
     ;;

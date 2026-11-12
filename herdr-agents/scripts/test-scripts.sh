@@ -69,7 +69,11 @@ case "\$1 \$2" in
     python3 -c 'import json,sys
 rows=[l.rstrip("\n").split("|") for l in open(sys.argv[1]) if l.strip()]
 print(json.dumps({"result":{"agents":[{"name":n,"cwd":c,"pane_id":"w:p","agent_status":"idle"} for n,c in rows]}}))' "$T/agents" ;;
-  "agent prompt") [ "\$4" = /exit ] && grep -v "^\$3|" "$T/agents" > "$T/agents.tmp"; mv "$T/agents.tmp" "$T/agents" 2>/dev/null; echo '{"result":{}}' ;;
+  "agent prompt")
+    if [ "\$4" = /exit ] && [ -s "$T/exit_dialog" ]; then cp "$T/exit_dialog" "$T/screen"   # 有后台任务：弹确认框，不退
+    elif [ "\$4" = /exit ]; then grep -v "^\$3|" "$T/agents" > "$T/agents.tmp"; mv "$T/agents.tmp" "$T/agents" 2>/dev/null; fi
+    echo '{"result":{}}' ;;
+  "pane send-keys") [ "\$4" = Enter ] && grep -q '❯ 1. Exit and stop tasks' "$T/screen" 2>/dev/null && : > "$T/agents"; echo '{"result":{}}' ;;
   "agent start")  if [ -s "$T/start_err" ]; then cat "$T/start_err"; exit 1; fi; echo '{"result":{}}' ;;
   "worktree create")
     git -C "$T/A" worktree add -q -b "\$6" "$T/wt" >/dev/null 2>&1
@@ -114,6 +118,19 @@ check "agent 在本仓库（子目录也算）：照常收" 0 "agent mine exited
 called "发了 /exit" "agent prompt mine /exit"
 printf 'drafter|%s\n' "$T/B" > "$T/agents"
 check "不带 REPO：行为不变（只凭名字）" 0 "agent drafter exited" "$here/retire.sh" exit drafter
+
+# ---------- retire.sh exit：有后台任务时 /exit 弹确认框（Claude Code 2.1.322，HISTORY #27） ----------
+: > "$T/calls"
+printf 'bg|%s\n' "$T/A" > "$T/agents"
+printf '   shell · sleep 900\n\n   ❯ 1. Exit and stop tasks\n     2. Move to background and exit\n     3. Stay\n\n   Enter to confirm · Esc to cancel\n' > "$T/exit_dialog"
+check "后台任务的确认框：选「Exit and stop tasks」，照常收" 0 "agent bg exited" env REPO="$T/A" "$here/retire.sh" exit bg
+called "按的是 Enter" "pane send-keys w:p Enter"
+: > "$T/calls"
+printf 'bg|%s\n' "$T/A" > "$T/agents"
+printf '   ❯ 3. Stay\n     1. Exit and stop tasks\n' > "$T/exit_dialog"
+check "光标不在「Exit and stop tasks」上：不按，报还在" 1 "still in herdr agent list" env REPO="$T/A" "$here/retire.sh" exit bg
+notcalled "没按任何键" "pane send-keys"
+rm -f "$T/exit_dialog" "$T/screen"
 
 # ---------- 收工：起 worker 时 herdr 顺带建的主 checkout workspace ----------
 A=$(cd "$T/A" && pwd -P)   # root-ws.sh 比的是 git 给的绝对路径

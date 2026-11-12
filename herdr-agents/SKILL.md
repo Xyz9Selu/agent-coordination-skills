@@ -420,7 +420,7 @@ for p in $(pgrep -x agy); do printf '%s\t%s\n' "$p" "$(readlink /proc/$p/cwd)"; 
 为什么正常收工不直接 kill：`/exit` 让 Claude Code 自己退出、收好 transcript，退出之后它从 `herdr agent list`
 消失，这本身就是「进程停了」的判据，不用去找 pid。为什么急停不用 `/exit`：它是一条普通 prompt，对方正忙时会
 **排队**到这一轮跑完（陷阱 ②），打断不了任何东西。
-agent 有后台任务（Bash 后台、Monitor）时，`/exit` 会先弹「Exit and stop tasks / Move to background and exit / Stay」
+agent 有后台任务（实测的是 Bash 后台任务，Monitor 没单独测）时，`/exit` 会先弹「Exit and stop tasks / Move to background and exit / Stay」
 确认框，不处理就一直停在那里。`retire.sh exit` 看到光标停在「Exit and stop tasks」上就按一次 Enter，后台任务随之停掉
 （Claude Code 2.1.322 实测，见 HISTORY #27）。手动发 `/exit` 时同样要读一下屏幕。
 `/exit` 这条路径只在空闲时测过（见 HISTORY #19、#27）。**推翻条件**：`/exit` 之后 agent 留在列表里

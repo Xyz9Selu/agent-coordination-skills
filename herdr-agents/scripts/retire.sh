@@ -42,7 +42,7 @@ case "$cmd" in
     pressed=0
     for i in $(seq 1 15); do
       in_list "$arg" || break
-      # 有后台任务（Bash 后台、Monitor）时 /exit 先弹确认框，默认光标在「Exit and stop tasks」（HISTORY #27）。
+      # 有后台任务（实测 Bash 后台任务）时 /exit 先弹确认框，默认光标在「Exit and stop tasks」（HISTORY #27）。
       # 只在光标确实停在那一项时按一次 Enter；框的文案或顺序变了就不按，留给下面报「还在」。
       if [ "$pressed" = 0 ] && [ -n "$pane" ] && herdr pane read "$pane" --lines 15 2>/dev/null | grep -q '❯ 1\. Exit and stop tasks'; then
         herdr pane send-keys "$pane" Enter >/dev/null 2>&1; pressed=1; echo "ℹ $arg had background tasks: chose 「Exit and stop tasks」"

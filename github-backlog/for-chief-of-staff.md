@@ -48,7 +48,10 @@ PR 状态）。输出与 `chief-of-staff` 的四个读数一一对应：
 
 - **交付物是 PR。** 「未完成的交付物」= draft PR；转正 = `gh pr ready`。按 `SKILL.md`「Pull Requests Link Their
   Issues」开 PR 时就写 `Closes #N`：合并时自动关 Issue，合并就是验收。
-- **grill 的结论写回 Issue 评论，不重写正文**（被 grill 过的 Issue 正文是旧的、评论是新的，这是有意的）。
+- **grill 的结论写回 Issue 评论，不重写正文**（被 grill 过的 Issue 正文是旧的、评论是新的，这是有意的）。评论的第一段
+  是 Done when；worker 把那几行原样抄在 PR 描述最上面，写成 `- [ ]` 清单，`gh pr ready` 之前逐条勾上、附证据。
+- **grill 开的是 draft PR**，标题按需求本身起（例如 `feat(<范围>): …(#N)`），不加 `docs(adr)`、`grill` 这类标记；转实施在
+  同一张 PR 里接着推，做完才 `gh pr ready`。别的 worker 要读还没进 main 的 ADR，给它那条结论评论或那条分支的链接。
 - **验收 = PR 合并。** 合并后 Issue 改 `Done`，不另等 maintainer（`SKILL.md`「Merged PR = accepted」）；命令是
   `close-merged.sh <PR> <Issue>`，chief-of-staff 的 `closeout.sh` 第一步就是它。
 - **`CLOSED` / `Done` 不等于做完了。** development 链接会在没有 PR 合并的情况下自动关 Issue，那不是验收；有一件
@@ -81,6 +84,12 @@ PR 状态）。输出与 `chief-of-staff` 的四个读数一一对应：
 | 已核 | `资源已核`（绿色） |
 
 细节写在 PR 评论里，不写在标签本身；**无标签 = 尚未核**。
+
+## 迁移闸：PR head 上的 commit status
+
+`chief-of-staff` 的迁移闸（它的 `patrol.md`「迁移闸」）在 GitHub 上是 PR head 提交上的一个 commit status，context
+`migration-chain`，出现在 PR 的 checks 里。私有仓库在免费账号上 `branches/<分支>/protection` 和 `rulesets` 都返回 403，
+设不成必需检查，所以它只是灯，不拦合并按钮（见 `chief-of-staff/HISTORY.md` #40）。推翻条件：仓库能设必需检查了。
 
 ## QB 容器的完成度：parent Issue 扫描
 

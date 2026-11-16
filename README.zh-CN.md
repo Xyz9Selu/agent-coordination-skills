@@ -52,8 +52,10 @@
 | `github-backlog/scripts/close-merged.sh` | github-backlog | 合并后核 PR 已落地、Issue 从 `In review` 改 `Done`（`--check` 只核） | 改 Issue 标签 |
 | `chief-of-staff/scripts/scan-collisions.sh` | chief-of-staff | 迁移号 / ADR 编号跨分支撞号扫描（`MIGRATION_DIR`、`ADR_DIR` 至少给一个；`--prs` 要 `gh`） | 不写 |
 | `chief-of-staff/scripts/test-scan-collisions.sh` | chief-of-staff | 在临时仓库里造出每种撞号情形，断言 `scan-collisions.sh` 的输出与退出码 | 只写临时目录 |
-| `chief-of-staff/scripts/scan-workers.sh` | chief-of-staff | 给 Monitor 用的巡检事件流：本项目的 agent、PR（`gh`）、main 前进、撞号、同项目另一个幕僚长、整机负载、心跳 | 不写（只 `git fetch`） |
-| `chief-of-staff/scripts/test-scan-workers.sh` | chief-of-staff | 用两个临时仓库和假 herdr 跑 `scan-workers.sh`，断言只报本项目、查重复幕僚长、负载事件 | 只写临时目录 |
+| `chief-of-staff/scripts/scan-workers.sh` | chief-of-staff | 给 Monitor 用的巡检事件流：本项目的 agent、PR（`gh`）、main 前进、撞号、迁移闸、同项目另一个幕僚长、整机负载、心跳 | `git fetch`，以及迁移闸的 commit status（`MERGE_GATE=0` 关掉） |
+| `chief-of-staff/scripts/test-scan-workers.sh` | chief-of-staff | 用临时仓库、假 herdr 和假 gh 跑 `scan-workers.sh`，断言只报本项目、查重复幕僚长、负载事件，以及迁移闸只发一次、只报一次 | 只写临时目录 |
+| `chief-of-staff/scripts/merge-gate.sh` | chief-of-staff | 迁移闸：给新增了数据库迁移的打开 PR 挂 commit status（`migration-chain`），同一时刻最多一张绿，描述里写原因；状态变了才发（`MIGRATION_DIR` 必填；`--dry-run` 只打印） | PR head 提交上的 commit status |
+| `chief-of-staff/scripts/test-merge-gate.sh` | chief-of-staff | 用临时仓库和假 gh 造出迁移闸的各种情形，断言发了哪些状态、按什么顺序、没变化不重发 | 只写临时目录 |
 | `chief-of-staff/scripts/closeout.sh` | chief-of-staff | PR 合并后按顺序收尾：`close-merged.sh` → `retire.sh exit` → 项目的 `DROP_DB_CMD` → `retire.sh remove` → 删本地分支 | 写——标签、worktree、workspace、分支，以及 `DROP_DB_CMD` 做的事 |
 
 `/chief-of-staff bootstrap` = 跑 `check-env.sh`，再跑你所配工作流的 bootstrap（配 GitHub 就是 `bootstrap.sh`）。

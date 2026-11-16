@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
 # 幕僚长巡检的事件流：每 INTERVAL 秒看一遍盘面，**每行输出 = 一个事件**，没变化就不出声（心跳除外）。
-# 只读：不写 gh、不写 git，唯一的写是 `git fetch`。
-# 依赖：herdr、git；盯 PR（PR-* 事件、撞号扫描的 --prs）要 gh 且仓库在 GitHub 上 —— 不是的话设 WATCH_PRS=0。
+# 写的只有两样：`git fetch`，以及迁移闸（merge-gate.sh）往 PR 的 head 提交挂的 commit status（MERGE_GATE=0 关掉）。
+# 不发评论、不改标签、不碰 git 的其它东西。
+# 依赖：herdr、git；盯 PR（PR-* 事件、撞号扫描的 --prs、迁移闸）要 gh 且仓库在 GitHub 上 —— 不是的话设 WATCH_PRS=0。
 #
 # ── 怎么挂 ────────────────────────────────────────────────────────────────────────────────────────
 # 用 Claude Code 的 Monitor 工具（每行 stdout 变成一条通知）：
@@ -21,6 +22,8 @@
 # 环境变量：
 #   REPO           仓库主 checkout 的路径（必填）
 #   MIGRATION_DIR  迁移目录、ADR_DIR  ADR 目录（相对 REPO，交给 scan-collisions.sh；都不设 = 不扫撞号，开头说一次）
+#   MERGE_GATE=1   设了 MIGRATION_DIR 且 WATCH_PRS=1 时，每轮跑 merge-gate.sh 给新增了迁移的 PR 挂 commit status；
+#                  0 = 不挂（开头说一次）
 #   INTERVAL=90    轮询间隔（秒）
 #   HEARTBEAT=300  心跳间隔（秒）；0 = 不出心跳
 #   DEFAULT_REMOTE=origin  DEFAULT_BRANCH=main
@@ -47,12 +50,15 @@
 #   COLLISION      撞号扫描的 🔴 行变了（新出现或内容变化），附全部 🔴 行。按 scan-collisions.sh 的建议协调：
 #                  先合并的保号，后合并的让路。
 #   COLLISION-CLEAR  之前报过的撞号都没了。
+#   GATE           迁移闸改了一张 PR 的 commit status，一条一行：「#N success|pending|failure 描述」。没变化不出声。
+#                  success → 这张现在可以合，可以告诉用户；failure → 描述里写了该改什么，转给那张 PR 的 worker；
+#                  pending → 排在别的 PR 后面或还是 draft，等着。规则见 merge-gate.sh 文件头、patrol.md「迁移闸」。
 #   COS-DUPLICATE  本项目里另有一个 pane 的标题是「… - CoS of …」（不是 SELF_PANE）。**不防抖，立刻报**：停止发牌，问用户要不要停掉它，
 #                  见 SKILL.md「同一项目只能有一个幕僚长」。只认得出按本技能改过名、herdr 看得见的那种。
 #   LOAD-HIGH / LOAD-OK  整机负载连续两轮高于 / 回到 LOAD_WARN 以下，附本项目与其它项目各有几个 working。负载是
 #                  整台机器的，别的项目的 worker 也在里面：高着就先别起新 worker、别让自己的 worker 开重活；
 #                  别的项目的 agent 不归你动。
-#   PROBE-ERROR    某个探测失败（herdr / gh / git fetch / 撞号扫描退出 9）。**失败不吞掉**，但同一个错误只在
+#   PROBE-ERROR    某个探测失败（herdr / gh / git fetch / 撞号扫描或迁移闸退出 9）。**失败不吞掉**，但同一个错误只在
 #                  第一次出现时报一行；PROBE-OK 表示它恢复了。没恢复之前，这一项的「没事件」不是「没变化」。
 #
 # ── 为什么这样 ───────────────────────────────────────────────────────────────────────────────────
@@ -81,7 +87,11 @@ ncpu=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1)
 LOAD_WARN=${LOAD_WARN:-$ncpu}
 BASE="$DEFAULT_REMOTE/$DEFAULT_BRANCH"
 SCAN_COLLISIONS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/scan-collisions.sh"
+MERGE_GATE_SH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/merge-gate.sh"
 export MIGRATION_DIR="${MIGRATION_DIR:-}" ADR_DIR="${ADR_DIR:-}"
+MERGE_GATE=${MERGE_GATE:-1}
+gate_on=0
+[ "$MERGE_GATE" = 1 ] && [ "$WATCH_PRS" = 1 ] && [ -n "$MIGRATION_DIR" ] && gate_on=1
 
 STATE=$(mktemp -d) || exit 9
 trap 'rm -rf "$STATE"' EXIT
@@ -118,6 +128,7 @@ screen_tail() {  # 画面最后三行有内容的，去掉 TUI 的装饰行
 [ -z "$MIGRATION_DIR$ADR_DIR" ] && emit "ℹ 没设 MIGRATION_DIR / ADR_DIR：不扫撞号"
 [ "$WATCH_PRS" = 1 ] || emit "ℹ WATCH_PRS=0：不盯 PR，撞号只扫 worker 的 worktree"
 [ -n "$SELF_PANE" ] || emit "ℹ 没有 SELF_PANE / HERDR_PANE_ID：认不出自己，不查重复幕僚长"
+[ -n "$MIGRATION_DIR" ] && [ "$WATCH_PRS" = 1 ] && [ $gate_on = 0 ] && emit "ℹ MERGE_GATE=0：不给 PR 挂迁移闸状态"
 
 while true; do
   # ---------- herdr agents ----------
@@ -256,12 +267,22 @@ for a in json.load(sys.stdin)["result"]["agents"]:
     fi
   fi
 
+  # ---------- 迁移闸：给新增了迁移的 PR 挂 commit status（没变的不发，每发一条出一行 GATE） ----------
+  if [ $gate_on = 1 ]; then
+    if gate_out=$(cd "$REPO" && "$MERGE_GATE_SH" --no-fetch 2>&1); then
+      probe_ok gate
+      while IFS= read -r l; do [ -n "$l" ] && emit "GATE $l"; done <<<"$gate_out"
+    else
+      probe_fail gate "merge-gate.sh rc=$?: $(tail -2 <<<"$gate_out" | tr '\n' ' ' | cut -c1-200)"
+    fi
+  fi
+
   # ---------- 首轮快照 / 心跳 ----------
   overview() {
     local a s=""
     for a in "${!reported[@]}"; do s+="$a=${reported[$a]} "; done
     local n; n=$(grep -c . "$STATE/prs.old" 2>/dev/null)
-    echo "agents: ${s:-（无）}| 其它项目 agent $others 个（working $others_working）| load ${load:-?}/${ncpu} 核 | open PRs: ${n:-?} | $BASE ${main_sha:0:8} | 撞号 $(grep -c '🔴' <<<"$collisions")"
+    echo "agents: ${s:-（无）}| 其它项目 agent $others 个（working $others_working）| load ${load:-?}/${ncpu} 核 | open PRs: ${n:-?} | $BASE ${main_sha:0:8} | 撞号 $(grep -c '🔴' <<<"$collisions") | 迁移闸 $([ $gate_on = 1 ] && echo 开 || echo 关)"
   }
   if [ $first = 1 ]; then
     emit "SCAN-READY $(overview)"

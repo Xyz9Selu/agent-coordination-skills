@@ -87,5 +87,57 @@ count "负载越线报一次 LOAD-HIGH"                         'LOAD-HIGH load 
 count "负载回落报一次 LOAD-OK"                           'LOAD-OK load 0.50' 1
 hasnt "没有探测失败"                                     'PROBE-ERROR'
 
+# ---------- 迁移闸：每轮都算，状态没变就不再发、不再报 ----------
+# 仓库 G：main 上有迁移 0001，打开的 PR #7 新增 0002 <- 0001。假 gh 记下每次 POST。
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
+git init -q --bare -b main "$T/G.git"
+git clone -q "$T/G.git" "$T/G" 2>/dev/null
+(cd "$T/G" && git checkout -q -b main 2>/dev/null && mkdir db \
+  && printf 'revision = "0001"\ndown_revision = None\n' > db/0001.py && git add -A && git commit -qm base && git push -q origin main \
+  && git checkout -q -b issue/7-x && printf 'revision = "0002"\ndown_revision = "0001"\n' > db/0002.py \
+  && git add -A && git commit -qm m && git push -q origin issue/7-x && git checkout -q main)
+cat > "$T/bin/gh" <<EOF
+#!/usr/bin/env python3
+import json, os, subprocess, sys
+a = sys.argv[1:]
+sha = subprocess.run(["git", "-C", "$T/G", "rev-parse", "origin/issue/7-x"], capture_output=True, text=True).stdout.strip()
+sp = "$T/statuses.json"
+st = json.load(open(sp)) if os.path.exists(sp) else {}
+if a[:2] == ["pr", "list"]:
+    f = a[a.index("--json") + 1]
+    if f == "headRefName": print("issue/7-x")
+    elif f == "number,isDraft,title": print("7\tready\tadd 0002")
+    else: print(json.dumps([{"number": 7, "headRefName": "issue/7-x", "headRefOid": sha, "isDraft": False,
+                             "baseRefName": "main", "url": "https://example.invalid/pull/7"}]))
+elif "POST" in a:
+    kv = dict(a[i + 1].split("=", 1) for i, x in enumerate(a) if x == "-f")
+    st.setdefault(sha, {})[kv["context"]] = {"state": kv["state"], "description": kv["description"]}
+    json.dump(st, open(sp, "w"))
+    open("$T/posts", "a").write(kv["state"] + "\n"); print("{}")
+elif a[:1] == ["api"]:
+    print(json.dumps({"statuses": [dict(context=c, **v) for c, v in st.get(sha, {}).items()]}))
+else:
+    sys.exit(1)
+EOF
+chmod +x "$T/bin/gh"
+agents
+echo "0.10 0.10 0.10 1/100 1" > "$T/loadavg"
+gate_run() {  # 其余参数是额外的环境变量；跑约 5 秒（几轮），输出在 $T/out
+  rm -f "$T/statuses.json" "$T/posts"
+  env PATH="$T/bin:$PATH" REPO="$T/G" INTERVAL=1 HEARTBEAT=0 WATCH_PRS=1 MIGRATION_DIR=db SELF_PANE=me \
+    LOADAVG_FILE="$T/loadavg" LOAD_WARN=4 "$@" "$here/scan-workers.sh" > "$T/out" 2>&1 &
+  pid=$!
+  sleep 5
+  kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
+}
+gate_run
+count "迁移闸：#7 变绿只报一次 GATE（之后几轮不重报）"  'GATE #7 success' 1
+n=$(grep -c . "$T/posts" 2>/dev/null); if [ "${n:-0}" = 1 ]; then ok "迁移闸：几轮下来只发了一次状态"; else bad "迁移闸：几轮下来发了 ${n:-0} 次状态，应为 1"; fi
+hasnt "迁移闸：没有探测失败"                              'PROBE-ERROR'
+gate_run MERGE_GATE=0
+hasnt "MERGE_GATE=0：不出 GATE"                           'GATE #'
+if [ -s "$T/posts" ]; then bad "MERGE_GATE=0：不该发状态"; else ok "MERGE_GATE=0：一条状态都不发"; fi
+
 echo "---- $pass 过，$fail 败"
 [ $fail = 0 ] || { echo "---- 脚本输出："; cat "$T/out"; exit 1; }

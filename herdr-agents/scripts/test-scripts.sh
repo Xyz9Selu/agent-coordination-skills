@@ -106,6 +106,9 @@ check "合格且没人用的名字：DRY_RUN 照常打印" 0 "herdr agent start 
 echo '{"error":{"code":"agent_pane_not_found","message":"agent target pane wN:p1 not found"}}' > "$T/start_err"
 check "agent start 失败：把 herdr 的报错原样打出来，不报成 NOT READY" 1 "agent start failed: .*agent_pane_not_found" \
   env REPO="$T/A" "$here/launch.sh" issue/1-x L worker-a-1-x "$T/prompt" "[TOK-1]"
+called "起 claude 时关掉输入建议（HISTORY #28）" 'agent start worker-a-1-x .*-- --model sonnet --settings \{"promptSuggestionEnabled":false\}'
+check "DRY_RUN 也打印这个参数" 0 'promptSuggestionEnabled":false' \
+  env REPO="$T/A" DRY_RUN=1 "$here/launch.sh" b1 L worker-a-1-y "$T/prompt" "[TOK-1]"
 
 # ---------- retire.sh exit：REPO 护栏 ----------
 : > "$T/calls"

@@ -41,6 +41,11 @@ description: Use when driving another coding agent (claude / agy / opencode) thr
 判断的 agent 会悄悄落在低一档的模型上。（只有 Claude Code 自己的 Agent 工具省略 `model` 才继承
 调用方。）
 
+**claude kind 起的时候关掉输入建议**：带 `--settings '{"promptSuggestionEnabled":false}'`（`launch.sh` 已带）。
+否则 Claude Code 会往空闲 agent 的输入框里放一行灰字建议，一个误按的 Enter 就把它当指令发出去，读屏时也容易
+当成有人在打字（Claude Code 2.1.323 对照实测，见 HISTORY #28）。推翻条件：这个设置键被改名或不再生效
+（不带参数和带参数的 agent 跑同样几轮，灰字表现一样）。
+
 agy 的模型名：`gemini-3.8-flash-high` 是写下时（2026-09-17/18）最新的，**`3.1-pro` 更旧**（名字里的
 "pro" 会骗人）。不传 `--model` 会落回会话默认。
 

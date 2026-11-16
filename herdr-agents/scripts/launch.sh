@@ -22,6 +22,8 @@ set -u
 : "${REPO:?REPO=仓库主 checkout 的路径}"
 branch=${1:?usage: launch.sh <branch> <label> <agent-name> <prompt-file> <token>}; label=${2:?}; name=${3:?}; pf=${4:?}; token=${5:?}
 BASE=${BASE:-origin/main}
+# 关掉 Claude Code 的输入建议：灰字会停在 worker 的输入框里，一个误按的 Enter 就当指令发出去（HISTORY #28）。
+NO_SUGGEST='{"promptSuggestionEnabled":false}'
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 [ -f "$pf" ] || { echo "no prompt file: $pf"; exit 1; }
 grep -qF -- "$token" "$pf" || { echo "token $token not in $pf — delivery could not be counted"; exit 1; }
@@ -33,7 +35,7 @@ fi
 if [ "${DRY_RUN:-}" = 1 ]; then
   echo "git -C $REPO fetch -q ${BASE%%/*} ${BASE#*/}"
   echo "herdr worktree create --cwd $REPO --branch $branch --base $BASE --label \"$label\""
-  echo "herdr agent start $name --kind claude --pane <root_pane> --timeout 90000 -- --model ${MODEL:-sonnet}"
+  echo "herdr agent start $name --kind claude --pane <root_pane> --timeout 90000 -- --model ${MODEL:-sonnet} --settings $NO_SUGGEST"
   echo "herdr agent prompt $name <$pf> --wait --until working --timeout 15000"
   echo "$here/count-delivered.sh <worktree> $token"
   exit 0
@@ -47,7 +49,7 @@ r=$(herdr worktree create --cwd "$REPO" --branch "$branch" --base "$BASE" --labe
 read -r pane tab ws wt < <(echo "$r" | python3 -c 'import json,sys;r=json.load(sys.stdin)["result"];print(r["root_pane"]["pane_id"],r["tab"]["tab_id"],r["workspace"]["workspace_id"],r["worktree"]["path"])')
 [ -n "$had_root" ] || "$here/root-ws.sh" record "$main"
 herdr tab rename "$tab" "$label" >/dev/null
-out=$(herdr agent start "$name" --kind claude --pane "$pane" --timeout 90000 -- --model "${MODEL:-sonnet}" 2>&1) \
+out=$(herdr agent start "$name" --kind claude --pane "$pane" --timeout 90000 -- --model "${MODEL:-sonnet}" --settings "$NO_SUGGEST" 2>&1) \
   || { echo "agent start failed: $(head -c 400 <<<"$out")"; echo "left behind: wt=$wt ws=$ws pane=$pane"; exit 1; }
 ready=0
 for i in $(seq 1 60); do

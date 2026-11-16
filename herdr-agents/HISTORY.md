@@ -446,3 +446,22 @@ agy 在第一次和第二次启动之间自己从 1.4.4 升到了 1.5.5，后面
 **原文（已改）：** 「`/exit` 这条路径只在空闲时测过一次（见 HISTORY #19）。」
 
 **推翻条件：** Claude Code 的确认框文案或默认项变了；或出了能跳过这个框的设置（那时改用设置，删掉按键）。
+
+## #28 · claude agent 起的时候关掉输入建议（2026-11-13 实测，2026-11-16 用户定，Claude Code 2.1.323）
+
+**起因：** 巡检读屏时在几个 worker 的输入框里看到「全量跑完开 PR 后告诉我链接」「[幕僚长 Iris] 0301 修复 PR 已…」这类灰字。
+那是 Claude Code 的 prompt suggestion，不是谁打的；但它停在输入框里，一个误按的 Enter 就会当指令发出去，读屏时也像有人
+在打字。用户要求查能不能关。
+
+**上游：** 2.1.323 的设置里有 `promptSuggestionEnabled`（说明原文：「When false, prompt suggestions are disabled」），
+另有环境变量 `CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION`，它优先于设置。只关我们起的实例、不碰用户自己的会话，用
+`--settings` 传 JSON。
+
+**对照实验（同目录、都是 haiku，各三轮同样的提示）：** 不带参数的 agent，第 1 轮输入框空，第 2、3 轮出现灰字
+「run the tests」；带 `--settings '{"promptSuggestionEnabled":false}'` 的三轮都空。另：hitianqi/troupe 的
+`src/role-commands.ts` 起 claude 时也是这样关的，独立印证。
+
+**改动：** `launch.sh` 两处（真跑和 DRY_RUN 的打印）带上这个参数；`test-scripts.sh` 加两条（假 herdr 记下的
+`agent start` 参数里有它、DRY_RUN 打印里有它），改之前 2 败，改之后 36 条全过。
+
+**推翻条件：** 设置键改名或失效（重做上面的对照即可判断）。

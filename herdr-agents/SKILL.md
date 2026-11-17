@@ -1,6 +1,6 @@
 ---
 name: herdr-agents
-description: Use when driving another coding agent (claude / agy / opencode) through herdr — starting it, confirming it is ready, getting an instruction delivered exactly once, reading it back, interrupting it, passing messages between agents, or telling stuck from finished from restarted. Also reached by the chief-of-staff skill for every worker it launches.
+description: Use when driving another coding agent (claude / codex / agy / opencode) through herdr — starting it, confirming it is ready, getting an instruction delivered exactly once, reading it back, interrupting it, passing messages between agents, or telling stuck from finished from restarted. Also reached by the chief-of-staff skill for every worker it launches.
 ---
 
 # herdr-agents
@@ -17,7 +17,7 @@ description: Use when driving another coding agent (claude / agy / opencode) thr
 ## 版本绑定
 
 > **每条都绑在一个 herdr 版本上。** 陷阱 ①、①a、②、⑥ 的 Escape 一行实测于 **herdr 0.9.5 + agy 1.5.5**（HISTORY #26）；
-> claude kind 的条目实测于 **0.9.5 + Claude Code 2.1.306**；陷阱 ③、`agent list` 的可见范围、名字与标签、`SendMessage`
+> claude kind 的条目实测于 **0.9.5 + Claude Code 2.1.306**；codex kind 的条目实测于 **0.9.5 + codex-cli 0.169.0**（HISTORY #29）；陷阱 ③、`agent list` 的可见范围、名字与标签、`SendMessage`
 > 扣留仍是 **0.8.0** 的实测，**未在 0.9.x 上复测**。agy 会自己升级（复测途中从 1.4.4 升到了 1.5.5），绑在 agy 上的条目
 > 先看 `agy --version`。发现某条对不上时，
 > 先核 `herdr --version` 与 `https://herdr.dev/latest.json` 的发布说明——上游可能已经修了，那就该升级，而不是
@@ -145,6 +145,21 @@ HISTORY #5、#6、#26 重做实验，并先核 `herdr --version`、`agy --versio
   **推翻条件**：Claude Code 改了默认选项或文案（那时 `launch.sh` 的就绪循环会跑满 60 次、报 `NOT READY`，
   不会误按）；新目录不再弹框。实测见 HISTORY #10。
   曾是「claude kind 有没有信任框没测过」，照 agy 写法直接按 Enter，已推翻（会话会退出），见 HISTORY #10。
+
+### codex kind：特征串、信任框、会话 id
+
+实测于 herdr 0.9.5 + codex-cli 0.169.0，见 HISTORY #29。`launch.sh` 只管 claude kind，codex 照下面手动做。
+
+- **就绪特征串是 `OpenAI Codex (v[0-9]`**，用 `pane read --source visible` 轮询。
+- **信任框只在 git 仓库里弹**（worktree 都是）：`agent start` 回 `agent_not_ready`、状态 `blocked`，画面是
+  「Trust this folder?」，**默认选中「1. Trust and continue」**——和 claude 相反，这里按 Enter 就对。仍然先读 `›` 那一行
+  再按，别假设。
+- **会话 id 直接从 herdr 拿**：`herdr agent get <名>` 的 `agent_session.value`；数送达读
+  `~/.codex/sessions/**/rollout-*<会话 id>*.jsonl` 里含那句独特的话的 `role:user` 记录（`count-delivered.sh` 只认 claude
+  的 transcript，不能用）。
+- **状态**：一轮结束读 `done`，**被 Escape 打断后也读 `done`**——分不出做完和被打断，读回滚。
+
+**推翻条件**：非 git 目录也弹信任框；默认项不再是 Trust；`agent_session` 不再给出与 rollout 文件名对得上的 id。
 
 ## 2 · 发指令，并确认它送达了、只送达了一次
 
@@ -320,6 +335,11 @@ agent 退出后会**从列表里消失**，pane 变 `unknown`，死活可判。�
 给正在干活的 agent 插指令，它会等当前这轮**完整跑完**才处理。改派时必须接受「对方会先把手上这轮
 做完」；要它立刻停，用陷阱 ⑥ 的 Escape 或 `kill`。
 
+**codex 忙时发的消息不一定等这一轮结束**：它会写「Messages to be submitted after next tool call」，可能在下一次工具
+调用后插进同一轮，那一轮原本要给的最终回复就没了；也可能照常排到下一轮。两次实测两个结果，触发条件未明（HISTORY #29）。
+所以**给 codex 的第二条指令等它停下再发**（`deliver-when-idle.sh`），并且 `agent wait` 返回后先读回滚看还有没有排着的消息。
+推翻条件：查清触发条件，或 codex 改成一律排到下一轮。
+
 agy 会把耗时的命令放到后台、先结束这一轮，这时排队的消息会在命令跑完之前就被回答——那是这一轮结束了，
 不是插队。agy 排队消息旁边的 `alt+m to send immediately`（以及 `/config` 里的 `Queued Messages`）没测干净，
 别当打断手段用（HISTORY #26）。**推翻条件**：排队的消息在同一轮没结束时就被处理了。
@@ -334,7 +354,8 @@ agy 会把耗时的命令放到后台、先结束这一轮，这时排队的消�
 | `herdr agent send-keys <agent> <键>` | **实测可用**（替 agy 按权限提示的 `2`）。官方技能也给了 `agent send-keys <名> esc` 的写法；用它当急停**没单独测过** |
 | `herdr agent <stop>` | **不存在这个子命令** |
 
-对所有 kind 都实测可用的急停只有 `kill <pid>`；agy 还可以用上表的 Escape。**推翻条件**：对 agy 按 Escape 后
+对所有 kind 都实测可用的急停只有 `kill <pid>`；agy 还可以用上表的 Escape。codex 按 Escape 只停这一轮，它已放到
+后台的 shell 命令照跑（画面写「1 background terminal running」），要连命令一起停就 `/quit` 或 `kill`（HISTORY #29）。**推翻条件**：对 agy 按 Escape 后
 画面没有 `Interrupted`，或前台命令的进程还在。pid 从该 agent 自报的地方取——例如它写下的占住记录里的进程号
 字段，或 §6 的「进程 ↔ worktree」对照。**`SendMessage` 不是急停手段** —— 会排队、会被扣留、会静默超时
 作废，指望它打断正在跑的 agent 会白等。
@@ -431,6 +452,9 @@ agent 有后台任务（实测的是 Bash 后台任务，Monitor 没单独测）
 `/exit` 这条路径只在空闲时测过（见 HISTORY #19、#27）。**推翻条件**：`/exit` 之后 agent 留在列表里
 （`retire.sh exit` 会报 ⚠）；或 herdr 改成 agent 退出后仍保留在列表里；或确认框的文案或默认项变了（`retire.sh` 不按，
 照样报 ⚠）。
+
+**codex kind 用 `herdr agent prompt <名> '/quit'` 退**（3/3 一次就退，后台命令一起收掉）；`retire.sh exit` 发的是
+claude 的 `/exit`，codex 不适用。不要用 `pane send-text` + 一次 Enter：那一下只选中斜杠菜单（HISTORY #29）。
 
 `retire.sh remove` 按 `herdr workspace list` 里每个 workspace 的 `worktree.checkout_path` 找挂着这个 worktree 的那个
 （workspace 的标签是给人看的，可能被改过；`checkout_path` 是 herdr 自己记的路径），删 worktree，关 workspace，

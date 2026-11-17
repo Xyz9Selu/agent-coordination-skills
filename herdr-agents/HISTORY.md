@@ -465,3 +465,26 @@ agy 在第一次和第二次启动之间自己从 1.4.4 升到了 1.5.5，后面
 `agent start` 参数里有它、DRY_RUN 打印里有它），改之前 2 败，改之后 36 条全过。
 
 **推翻条件：** 设置键改名或失效（重做上面的对照即可判断）。
+
+## #29 · codex kind 第一轮最小实验（2026-11-17，herdr 0.9.5，codex-cli 0.169.0，均为当时最新）
+
+**起因：** 用户要把 codex（`-p flash`，opencode-go 的 deepseek-v4.1-flash）当 worker 用，本技能原来没有 codex 的任何条目。
+先查上游：`herdr.dev/latest.json` 是 0.9.5，npm `@openai/codex` 是 0.169.0，本机都已是最新。
+
+**先写下的假设（逐条去推翻）和结果：**
+
+| # | 假设 | 结果 |
+|---|---|---|
+| H1 | 新目录先弹信任框，`agent start` 回 `agent_not_ready` | **只在 git 仓库里弹。** 非 git 的新目录（/home 下 1 次、/tmp 下 3 次）直接就绪；/tmp 下 `git init` 过的目录弹框，`agent start` 回 `agent_not_ready`、状态 `blocked`。框里默认选中「1. Trust and continue」，按 Enter 后 2 秒出 banner。/home 下另有一层：用户 config.toml 把 `/home/xyz` 标了 trusted，子目录继承 |
+| H2 | 有可用的 banner 特征串 | 成立：`OpenAI Codex (v0.169.0)`，判据用 `OpenAI Codex (v[0-9]` |
+| H3 | 就绪后立刻发，只送达一次 | 成立，4/4（3 次非 git 立即发、1 次 git 按掉信任框后发）。`agent get` 的 `agent_session.value` 就是 codex 会话 id，rollout 文件名里带它；带 token 的 `response_item` / `role:user` 恰好 1 条 |
+| H4 | 忙时发：排队到这一轮结束，只送达一次 | **两次两个结果，未定。** 第 1 次：画面显示「Messages to be submitted after next tool call」，消息在 `sleep 25` 结束后插进同一轮，模型回了第二条、**第一条要求的最终回复没出现**。第 2 次（`sleep 20`）：第一条照常回完，第二条成了新的一轮；`agent wait` 在第一轮结束时就返回了，紧接着发的 `/quit` 让第二轮没有回复。两次都只送达 1 次 |
+| H5 | 状态跟得上 | working 期间读 `working`；一轮结束读 `done`（不是 `idle`）；**被 Escape 打断后也读 `done`** |
+| H6 | `pane send-keys Escape` 能打断 | 部分成立：画面出现「■ Conversation interrupted」，这一轮停了；但 codex 已放到后台的 shell 命令（`sleep 60`，在 codex-linux-sandbox/bwrap 里）**还在跑**，画面写着「1 background terminal running · /stop to close」 |
+| H7 | `/quit` 退出，agent 从列表消失 | 成立。`agent prompt <名> '/quit'` 一次就退（3/3）；用 `pane send-text` + `send-keys Enter` 时，第一下 Enter 只选中了斜杠菜单，第二下才退（1 次）。退出后后台那条 sleep 也没了 |
+
+**测法：** 独立 herdr workspace（`LAB codex-kind`），目录 `~/tmp/herdr-codex-lab/` 与 `/tmp/hcx-lab-*`，脚本 `imm.sh`
+与假设表留在 `~/tmp/herdr-codex-lab/`。送达计数读 `~/.codex/sessions/**/rollout-*<会话 id>*.jsonl`。
+
+**没测的：** 权限/审批框长什么样、`agent_status` 会不会读成 `blocked`；`/stop` 能否单独收后台命令；`kill <pid>` 后
+sandbox 子进程是否跟着死；H4 的触发条件（为什么一次插队一次排队）。
